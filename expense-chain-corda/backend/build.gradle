@@ -1,0 +1,35 @@
+plugins {
+    id 'org.springframework.boot' version '2.7.18'
+    id 'io.spring.dependency-management' version '1.0.15.RELEASE'
+    id 'java'
+}
+
+group = 'com.expensechain'
+version = '1.0.0'
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+    maven { url 'https://download.corda.net/maven/corda-releases' }
+    maven { url 'https://download.corda.net/maven/corda-dependencies' }
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    
+    // Corda RPC client
+    implementation "net.corda:corda-rpc:$corda_release_version"
+    implementation "net.corda:corda-core:$corda_core_release_version"
+    
+    // Corda CorDapps
+    implementation project(':contracts-java')
+    implementation project(':workflows-java')
+    
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+springBoot {
+    mainClass = 'com.expensechain.backend.ExpenseChainApplication'
+}

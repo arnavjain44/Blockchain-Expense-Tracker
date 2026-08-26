@@ -1,0 +1,5 @@
+rootProject.name = 'expense-chain-corda'
+
+include 'contracts-java'
+include 'workflows-java'
+include 'backend'

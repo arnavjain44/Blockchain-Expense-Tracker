@@ -1,0 +1,97 @@
+// =====================================================================
+// ExpenseChain DA2 — Corda project
+// PHASE B: contracts-java (ExpenseState/ExpenseContract) and
+// workflows-java (AddExpenseFlow) now exist and are deployed to every
+// node below.
+// =====================================================================
+
+buildscript {
+    ext {
+        corda_release_group   = 'net.corda'
+        corda_core_release_group = 'net.corda'
+        corda_release_version = '4.11'
+        corda_core_release_version = '4.11'
+        corda_gradle_plugins_version = '6.1.4'
+        kotlin_version = '1.2.71'
+        junit_version = '4.12'
+        quasar_version = '0.7.13'
+        corda_platform_version = '11'
+    }
+    repositories {
+        mavenCentral()
+        maven { url 'https://download.corda.net/maven/corda-releases' }
+        maven { url 'https://software.r3.com/artifactory/corda' }
+    }
+    dependencies {
+        classpath "net.corda.plugins:cordapp:$corda_gradle_plugins_version"
+        classpath "net.corda.plugins:cordformation:$corda_gradle_plugins_version"
+        classpath "net.corda.plugins:quasar-utils:$corda_gradle_plugins_version"
+    }
+}
+
+apply plugin: 'net.corda.plugins.cordformation'
+
+allprojects {
+    repositories {
+        mavenCentral()
+        maven { url 'https://download.corda.net/maven/corda-releases' }
+        maven { url 'https://software.r3.com/artifactory/corda' }
+    }
+}
+
+// ---------------------------------------------------------------------
+// PHASE B SUCCESS CONDITION:
+//   `gradlew.bat deployNodes` succeeds, all 4 nodes start with the
+//   ExpenseChain cordapps installed, and `flow start AddExpenseFlow ...`
+//   run from Garvit's shell finalizes a transaction whose ExpenseState
+//   is retrievable via `run vaultQuery` from Garvit, Arnav AND Mridul's
+//   nodes (proving genuine multi-party propagation, not a single-node
+//   record).
+// ---------------------------------------------------------------------
+task deployNodes(type: net.corda.plugins.Cordform, dependsOn: []) {
+    nodeDefaults {
+        projectCordapp {
+            deploy = false   // we deploy explicit modules below instead
+        }
+        cordapp project(':contracts-java')
+        cordapp project(':workflows-java')
+        rpcUsers = [[ user: "user1", password: "test", permissions: ["ALL"]]]
+    }
+
+    node {
+        name "O=Notary,L=London,C=GB"
+        notary = [validating: false]
+        p2pPort 10002
+        rpcSettings {
+            address("localhost:10003")
+            adminAddress("localhost:10023")
+        }
+    }
+    node {
+        name "O=Garvit,L=New Delhi,C=IN"
+        p2pPort 10005
+        rpcSettings {
+            address("localhost:10006")
+            adminAddress("localhost:10026")
+        }
+        webPort 10007
+    }
+    node {
+        name "O=Arnav,L=Mumbai,C=IN"
+        p2pPort 10008
+        rpcSettings {
+            address("localhost:10009")
+            adminAddress("localhost:10029")
+        }
+        webPort 10010
+    }
+    node {
+        name "O=Mridul,L=Bengaluru,C=IN"
+        p2pPort 10011
+        rpcSettings {
+            address("localhost:10012")
+            adminAddress("localhost:10032")
+        }
+        webPort 10013
+    }
+}

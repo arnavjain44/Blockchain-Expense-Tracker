@@ -1,0 +1,64 @@
+# ==============================================================================
+# EXPENSECHAIN DA2 - SYSTEM & RUNTIME REQUIREMENTS
+# ==============================================================================
+# This file lists the software runtime, language, build tool, framework,
+# and system requirements for running ExpenseChain DA2 on a local development machine.
+# ==============================================================================
+
+# Operating System & Architecture
+OS=Windows 10 / Windows 11 (64-bit x64)
+Shell=PowerShell 5.1+ or CMD.exe
+
+# Hardware Requirements
+RAM_Minimum=8 GB
+RAM_Recommended=16 GB
+Disk_Space_Free=4 GB
+
+# Java Development Kit (JDK)
+# Note: R3 Corda 4.11 strictly requires Java 8 (Hotspot). Java 9+ is NOT supported by Corda 4.11.
+Java_Version=1.8.0_412 (Adoptium Eclipse Temurin OpenJDK 8 x64)
+Java_Home=tools/jdk8
+
+# Build Tool
+# Note: Corda Gradle Plugins 5.0.12 strictly require Gradle 6.9.x.
+Gradle_Version=6.9.3
+Gradle_Path=tools/gradle-6.9.3
+
+# Blockchain Framework
+Blockchain_Platform=R3 Corda Community Edition
+Corda_Version=4.11
+Quasar_Version=0.7.12_r3
+CorDapp_Plugin_Version=5.0.12
+
+# Web Backend & Application Server
+Backend_Framework=Spring Boot
+Spring_Boot_Version=2.7.18
+Embedded_Server=Apache Tomcat 9.0.83
+Database_Storage=In-Memory H2 / Atomic Concurrent DataStore + Corda Vault
+
+# Network Port Allocations (Must be free before launch)
+# Web Backend Application
+Port_Web_Backend=8080
+
+# Corda Notary Node (O=Notary, L=London, C=GB)
+Port_Notary_P2P=10002
+Port_Notary_RPC=10003
+Port_Notary_Admin=10023
+
+# Corda Garvit Node (O=Garvit, L=New Delhi, C=IN)
+Port_Garvit_P2P=10005
+Port_Garvit_RPC=10006
+Port_Garvit_Admin=10026
+
+# Corda Arnav Node (O=Arnav, L=Mumbai, C=IN)
+Port_Arnav_P2P=10008
+Port_Arnav_RPC=10009
+Port_Arnav_Admin=10029
+
+# Corda Mridul Node (O=Mridul, L=Bengaluru, C=IN)
+Port_Mridul_P2P=10011
+Port_Mridul_RPC=10012
+Port_Mridul_Admin=10032
+
+# Automated Setup Script
+# Run SETUP_ENVIRONMENT.bat to automatically download all portable tools and build nodes.

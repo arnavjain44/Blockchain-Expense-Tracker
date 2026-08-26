@@ -1,0 +1,8 @@
+rootProject.name = 'expense-chain-corda'
+
+include 'contracts-java'
+include 'workflows-java'
+
+// Phase C will add settlement logic into these same two modules
+// (SettlementState/SettlementContract in contracts-java,
+//  RecordSettlementFlow in workflows-java) — no new modules needed.

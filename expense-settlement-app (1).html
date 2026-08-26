@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ExpenseChain — Blockchain-Based Shared Expense Settlement</title>
+<style>
+  :root {
+    --primary: #4f46e5;
+    --primary-dark: #4338ca;
+    --success: #16a34a;
+    --danger: #dc2626;
+    --warn: #b45309;
+    --bg: #f7f8fb;
+    --card-bg: #ffffff;
+    --border: #e5e7eb;
+    --text: #1f2937;
+    --text-muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Segoe UI',Roboto,-apple-system,sans-serif; background:var(--bg); color:var(--text); }
+  #app { min-height:100vh; }
+  .page-container { max-width:1000px; margin:0 auto; padding:24px; }
+  .navbar { display:flex; align-items:center; justify-content:space-between; padding:14px 32px; background:var(--card-bg); border-bottom:1px solid var(--border); flex-wrap:wrap; gap:10px; }
+  .navbar-brand { font-weight:700; font-size:1.2rem; color:var(--primary); cursor:pointer; }
+  .navbar-links { display:flex; gap:20px; flex-wrap:wrap; }
+  .navbar-links a { color:var(--text); text-decoration:none; font-weight:500; cursor:pointer; }
+  .navbar-links a.active, .navbar-links a:hover { color:var(--primary); }
+  .navbar-user { display:flex; align-items:center; gap:12px; }
+  button { background:var(--primary); color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:500; font-size:0.9rem; }
+  button:hover { background:var(--primary-dark); }
+  button.secondary { background:#e5e7eb; color:var(--text); }
+  button.secondary:hover { background:#d1d5db; }
+  button.small { padding:4px 10px; font-size:0.8rem; }
+  input, select, textarea { padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.95rem; font-family:inherit; }
+  .auth-card { max-width:380px; margin:60px auto; background:var(--card-bg); padding:32px; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+  .auth-card h2 { margin-top:0; }
+  .auth-card form { display:flex; flex-direction:column; gap:10px; }
+  .card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; margin:16px 0; }
+  .stat-card { background:var(--card-bg); padding:18px; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.06); display:flex; flex-direction:column; gap:6px; }
+  .stat-label { color:var(--text-muted); font-size:0.85rem; }
+  .stat-value { font-size:1.5rem; font-weight:700; }
+  .positive { color:var(--success); }
+  .negative { color:var(--danger); }
+  .group-card { background:var(--card-bg); padding:18px; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.06); text-decoration:none; color:var(--text); display:block; cursor:pointer; }
+  .group-card h3 { margin:0 0 6px; }
+  .group-card p { margin:0; color:var(--text-muted); font-size:0.9rem; }
+  .page-header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+  .inline-form { background:var(--card-bg); padding:16px; border-radius:10px; display:flex; flex-wrap:wrap; gap:10px; margin:12px 0; align-items:center; }
+  .expense-form { flex-direction:column; align-items:stretch; }
+  .form-row { display:flex; gap:10px; flex-wrap:wrap; }
+  .form-row > * { flex:1; min-width:140px; }
+  .checkbox-row { display:flex; flex-wrap:wrap; gap:14px; }
+  .checkbox-item { display:flex; align-items:center; gap:6px; font-size:0.9rem; background:#f9fafb; padding:6px 10px; border-radius:6px; }
+  .custom-amount-input { width:90px; margin-left:6px; }
+  .tabs { display:flex; gap:8px; margin:16px 0; flex-wrap:wrap; }
+  .tab { background:var(--card-bg); color:var(--text); border:1px solid var(--border); }
+  .tab.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .data-table { width:100%; border-collapse:collapse; background:var(--card-bg); border-radius:10px; overflow:hidden; font-size:0.9rem; }
+  .data-table th, .data-table td { padding:10px 12px; text-align:left; border-bottom:1px solid var(--border); }
+  .data-table th { background:#f3f4f6; }
+  .activity-list { list-style:none; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .activity-list li { background:var(--card-bg); padding:12px 16px; border-radius:8px; display:flex; align-items:center; gap:10px; font-size:0.92rem; flex-wrap:wrap; }
+  .badge { display:inline-block; background:#eef2ff; color:var(--primary); padding:2px 8px; border-radius:20px; font-size:0.75rem; font-weight:600; }
+  .badge-expense { background:#eef2ff; color:var(--primary); }
+  .badge-settlement { background:#ecfdf5; color:var(--success); }
+  .badge-success { background:#ecfdf5; color:var(--success); }
+  .badge-pending { background:#fffbeb; color:var(--warn); }
+  .settle-btn { margin-left:auto; }
+  .error-text { color:var(--danger); font-size:0.85rem; margin:2px 0; }
+  .hint-text { color:var(--text-muted); font-size:0.85rem; }
+  .mono { font-family:'Courier New',monospace; font-size:0.82rem; }
+  .toast { position:fixed; top:16px; right:16px; background:#111827; color:#fff; padding:12px 18px; border-radius:8px; z-index:999; box-shadow:0 4px 10px rgba(0,0,0,0.2); }
+  .banner { background:#eef2ff; border:1px solid #c7d2fe; padding:12px 16px; border-radius:8px; font-size:0.85rem; margin-bottom:16px; }
+  label.field-label { font-size:0.82rem; color:var(--text-muted); font-weight:600; margin-bottom:-4px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* =========================================================================
+   ExpenseChain — single-file demo build
+   -------------------------------------------------------------------------
+   This is a self-contained, instantly-runnable version of the Blockchain-
+   Based Shared Expense Settlement System: just open this HTML file in a
+   browser, no server / database / npm install required.
+
+   Design notes / honest tradeoffs vs the full multi-tier build:
+   - All "backend" logic (auth, splitting, balances, settlements) runs in
+     the browser and persists to localStorage instead of MySQL + Spring Boot.
+   - The "blockchain" is a REAL hash-chain implemented with the browser's
+     native Web Crypto SHA-256 API: every expense/settlement record stores
+     the hash of the previous record + its own data, so any tampering with
+     history is detectable (exactly the property a blockchain gives you) —
+     it just isn't a separate Ethereum node running Solidity.
+   - Passwords are hashed with SHA-256 client-side for demo purposes; this
+     is NOT production-grade auth (no server, no salt rounds), which is
+     fine for a local single-file mini-project demo but should not be used
+     to actually protect real user data.
+   ========================================================================= */
+
+// ---------------------------------------------------------------------
+// Storage
+// ---------------------------------------------------------------------
+const DB_KEY = 'expenseChainDB_v1';
+const SESSION_KEY = 'expenseChainSession_v1';
+
+function loadDB() {
+  const raw = localStorage.getItem(DB_KEY);
+  if (raw) return JSON.parse(raw);
+  const fresh = {
+    users: [], groups: [], groupMembers: [], expenses: [],
+    expenseSplits: [], settlements: [], blockchain: [],
+    nextIds: { user:1, group:1, groupMember:1, expense:1, split:1, settlement:1, tx:1 }
+  };
+  saveDB(fresh);
+  return fresh;
+}
+function saveDB(db) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+let DB = loadDB();
+
+function nextId(type) {
+  const id = DB.nextIds[type]++;
+  saveDB(DB);
+  return id;
+}
+
+function getSession() {
+  const raw = localStorage.getItem(SESSION_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
+function setSession(userId) { localStorage.setItem(SESSION_KEY, JSON.stringify({ userId })); }
+function clearSession() { localStorage.removeItem(SESSION_KEY); }
+
+// ---------------------------------------------------------------------
+// Crypto helpers (Web Crypto SHA-256)
+// ---------------------------------------------------------------------
+async function sha256(text) {
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ---------------------------------------------------------------------
+// Blockchain layer: hash-chained, append-only ledger
+// ---------------------------------------------------------------------
+async function recordOnChain(referenceType, referenceId, canonicalData) {
+  const prevHash = DB.blockchain.length > 0 ? DB.blockchain[DB.blockchain.length - 1].hash : '0'.repeat(64);
+  const timestamp = new Date().toISOString();
+  const payload = `${prevHash}|${referenceType}|${referenceId}|${canonicalData}|${timestamp}`;
+  const hash = await sha256(payload);
+  const tx = {
+    id: nextId('tx'),
+    referenceType, referenceId,
+    canonicalData, prevHash, hash,
+    txHash: '0x' + hash.slice(0, 40),
+    timestamp,
+    status: 'CONFIRMED'
+  };
+  DB.blockchain.push(tx);
+  saveDB(DB);
+  return tx;
+}
+
+async function verifyChainIntegrity() {
+  // Recomputes every hash in sequence; if any record's data was edited in
+  // storage after the fact, the recomputed hash won't match, and every
+  // subsequent block's prevHash link breaks too — same tamper-evidence
+  // property a real blockchain gives you.
+  let prevHash = '0'.repeat(64);
+  for (const tx of DB.blockchain) {
+    const payload = `${prevHash}|${tx.referenceType}|${tx.referenceId}|${tx.canonicalData}|${tx.timestamp}`;
+    const recomputed = await sha256(payload);
+    if (recomputed !== tx.hash || tx.prevHash !== prevHash) {
+      return { valid: false, brokenAt: tx.id };
+    }
+    prevHash = tx.hash;
+  }
+  return { valid: true };
+}
+
+// ---------------------------------------------------------------------
+// Domain logic
+// ---------------------------------------------------------------------
+function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+
+function calculateSplits(amount, splitType, participants) {
+  const result = [];
+  if (splitType === 'EQUAL') {
+    const n = participants.length;
+    if (n === 0) throw new Error('At least one participant is required');
+    const share = round2(amount / n);
+    let running = 0;
+    participants.forEach((userId, i) => {
+      let s = share;
+      if (i === participants.length - 1) s = round2(amount - running);
+      else running = round2(running + share);
+      result.push({ userId, shareAmount: s });
+    });
+  } else {
+    let sum = 0;
+    participants.forEach(p => {
+      if (p.amount == null || isNaN(p.amount)) throw new Error('Custom split requires an amount for every participant');
+      sum = round2(sum + Number(p.amount));
+      result.push({ userId: p.userId, shareAmount: Number(p.amount) });
+    });
+    if (Math.abs(sum - amount) > 0.01) {
+      throw new Error(`Custom split amounts (₹${sum}) must sum to the expense total (₹${amount})`);
+    }
+  }
+  return result;
+}
+
+function getNetBalances(groupId) {
+  const net = {};
+  const add = (id, amt) => { net[id] = round2((net[id] || 0) + amt); };
+
+  DB.expenses.filter(e => e.groupId === groupId).forEach(e => {
+    add(e.paidBy, e.amount);
+    DB.expenseSplits.filter(s => s.expenseId === e.id).forEach(s => add(s.userId, -s.shareAmount));
+  });
+
+  DB.settlements.filter(s => s.groupId === groupId && s.status === 'COMPLETED').forEach(s => {
+    add(s.paidBy, s.amount);
+    add(s.paidTo, -s.amount);
+  });
+
+  return net;
+}
+
+function simplifyDebts(net) {
+  const creditors = [], debtors = [];
+  Object.entries(net).forEach(([id, amt]) => {
+    id = Number(id);
+    if (amt > 0.01) creditors.push({ id, amt });
+    else if (amt < -0.01) debtors.push({ id, amt: -amt });
+  });
+  creditors.sort((a, b) => b.amt - a.amt);
+  debtors.sort((a, b) => b.amt - a.amt);
+
+  const results = [];
+  let ci = 0, di = 0;
+  while (ci < creditors.length && di < debtors.length) {
+    const c = creditors[ci], d = debtors[di];
+    const settle = round2(Math.min(c.amt, d.amt));
+    if (settle > 0.01) results.push({ from: d.id, to: c.id, amount: settle });
+    c.amt = round2(c.amt - settle);
+    d.amt = round2(d.amt - settle);
+    if (c.amt <= 0.01) ci++;
+    if (d.amt <= 0.01) di++;
+  }
+  return results;
+}
+
+function userName(id) {
+  const u = DB.users.find(u => u.id === Number(id));
+  return u ? u.name : `User #${id}`;
+}
+
+// ---------------------------------------------------------------------
+// Router / render
+// ---------------------------------------------------------------------
+let route = location.hash.replace('#', '') || '/login';
+window.addEventListener('hashchange', () => { route = location.hash.replace('#', '') || '/login'; render(); });
+function nav(path) { location.hash = path; }
+
+function currentUser() {
+  const s = getSession();
+  if (!s) return null;
+  return DB.users.find(u => u.id === s.userId) || null;
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const existing = document.getElementById('toast');
+  if (existing) existing.remove();
+  const el = document.createElement('div');
+  el.id = 'toast'; el.className = 'toast'; el.textContent = msg;
+  document.body.appendChild(el);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.remove(), 3000);
+}
+
+function render() {
+  const app = document.getElementById('app');
+  const user = currentUser();
+
+  if (!user && route !== '/register') { route = '/login'; }
+  if (user && (route === '/login' || route === '/register')) { route = '/dashboard'; }
+
+  let body = '';
+  if (route === '/login') body = renderLogin();
+  else if (route === '/register') body = renderRegister();
+  else if (route === '/dashboard') body = renderDashboard(user);
+  else if (route === '/groups') body = renderGroups(user);
+  else if (route.startsWith('/groups/')) body = renderGroupDetail(user, Number(route.split('/')[2]));
+  else if (route === '/blockchain') body = renderBlockchain(user);
+  else if (route === '/profile') body = renderProfile(user);
+  else body = renderDashboard(user);
+
+  app.innerHTML = (user ? renderNavbar(user) : '') + `<div class="page-container">${body}</div>`;
+  attachHandlers(user);
+}
+
+function renderNavbar(user) {
+  const link = (path, label) => `<a data-nav="${path}" class="${route === path ? 'active' : ''}">${label}</a>`;
+  return `
+  <nav class="navbar">
+    <div class="navbar-brand" data-nav="/dashboard">💰 ExpenseChain</div>
+    <div class="navbar-links">
+      ${link('/dashboard', 'Dashboard')}
+      ${link('/groups', 'Groups')}
+      ${link('/blockchain', 'Blockchain')}
+      ${link('/profile', 'Profile')}
+    </div>
+    <div class="navbar-user">
+      <span class="hint-text">Viewing as</span>
+      <select id="userSwitcher">
+        ${DB.users.map(u => `<option value="${u.id}" ${u.id === user.id ? 'selected' : ''}>${u.name}</option>`).join('')}
+      </select>
+      <button class="secondary small" id="logoutBtn">Logout</button>
+    </div>
+  </nav>`;
+}
+
+// ---------------------------------------------------------------------
+// Auth pages
+// ---------------------------------------------------------------------
+function renderLogin() {
+  return `
+  <div class="auth-card">
+    <h2>Welcome back</h2>
+    <form id="loginForm">
+      <input name="email" type="email" placeholder="Email" required />
+      <input name="password" type="password" placeholder="Password" required />
+      <div id="loginError" class="error-text"></div>
+      <button type="submit">Login</button>
+    </form>
+    <p>No account? <a data-nav="/register" style="color:var(--primary);cursor:pointer;">Register</a></p>
+    <p class="hint-text">Demo tip: register a couple of users (e.g. Alice, Bob, Carol) one after another, then use the "Viewing as" switcher in the navbar to hop between them and add them to a group.</p>
+  </div>`;
+}
+
+function renderRegister() {
+  return `
+  <div class="auth-card">
+    <h2>Create your account</h2>
+    <form id="registerForm">
+      <input name="name" placeholder="Full name" required />
+      <input name="email" type="email" placeholder="Email" required />
+      <input name="password" type="password" placeholder="Password" required />
+      <input name="phone" placeholder="Phone (optional)" />
+      <div id="registerError" class="error-text"></div>
+      <button type="submit">Register</button>
+    </form>
+    <p>Already have an account? <a data-nav="/login" style="color:var(--primary);cursor:pointer;">Login</a></p>
+  </div>`;
+}
+
+// ---------------------------------------------------------------------
+// Dashboard
+// ---------------------------------------------------------------------
+function renderDashboard(user) {
+  const myGroupIds = DB.groupMembers.filter(m => m.userId === user.id).map(m => m.groupId);
+  let totalOwe = 0, totalOwed = 0;
+  myGroupIds.forEach(gid => {
+    const net = getNetBalances(gid)[user.id] || 0;
+    if (net > 0) totalOwed = round2(totalOwed + net);
+    else if (net < 0) totalOwe = round2(totalOwe + Math.abs(net));
+  });
+  const totalBalance = round2(totalOwed - totalOwe);
+
+  const activity = [];
+  myGroupIds.forEach(gid => {
+    DB.expenses.filter(e => e.groupId === gid).forEach(e =>
+      activity.push({ type: 'EXPENSE', desc: e.title, amount: e.amount, ts: e.createdAt }));
+    DB.settlements.filter(s => s.groupId === gid).forEach(s =>
+      activity.push({ type: 'SETTLEMENT', desc: `${userName(s.paidBy)} → ${userName(s.paidTo)}`, amount: s.amount, ts: s.settledAt || s.createdAt }));
+  });
+  activity.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+  const recent = activity.slice(0, 10);
+
+  return `
+    <h2>Dashboard</h2>
+    <div class="card-grid">
+      <div class="stat-card"><span class="stat-label">Total Balance</span><span class="stat-value ${totalBalance >= 0 ? 'positive' : 'negative'}">₹${totalBalance.toFixed(2)}</span></div>
+      <div class="stat-card"><span class="stat-label">You Owe</span><span class="stat-value negative">₹${totalOwe.toFixed(2)}</span></div>
+      <div class="stat-card"><span class="stat-label">Owed to You</span><span class="stat-value positive">₹${totalOwed.toFixed(2)}</span></div>
+      <div class="stat-card"><span class="stat-label">Active Groups</span><span class="stat-value">${myGroupIds.length}</span></div>
+    </div>
+    <h3>Recent Activity</h3>
+    <ul class="activity-list">
+      ${recent.length === 0 ? '<li>No activity yet — create a group and add your first expense!</li>' : ''}
+      ${recent.map(a => `<li><span class="badge ${a.type === 'EXPENSE' ? 'badge-expense' : 'badge-settlement'}">${a.type}</span> ${a.desc} — ₹${a.amount.toFixed(2)}</li>`).join('')}
+    </ul>
+    <div style="margin-top:16px;"><button data-nav="/groups">Go to Groups</button></div>
+  `;
+}
+
+// ---------------------------------------------------------------------
+// Groups
+// ---------------------------------------------------------------------
+function renderGroups(user) {
+  const myGroups = DB.groupMembers.filter(m => m.userId === user.id)
+    .map(m => DB.groups.find(g => g.id === m.groupId)).filter(Boolean);
+
+  return `
+    <div class="page-header">
+      <h2>Your Groups</h2>
+      <button id="toggleGroupForm">+ Create Group</button>
+    </div>
+    <form class="inline-form" id="createGroupForm" style="display:none;">
+      <input name="name" placeholder="Group name (e.g. Goa Trip)" required />
+      <input name="description" placeholder="Description" />
+      <div id="groupError" class="error-text"></div>
+      <button type="submit">Create</button>
+    </form>
+    <div class="card-grid">
+      ${myGroups.map(g => `
+        <div class="group-card" data-nav="/groups/${g.id}">
+          <h3>${g.name}</h3>
+          <p>${g.description || ''}</p>
+        </div>`).join('')}
+      ${myGroups.length === 0 ? '<p>No groups yet. Create one to get started.</p>' : ''}
+    </div>
+  `;
+}
+
+function renderGroupDetail(user, groupId) {
+  const group = DB.groups.find(g => g.id === groupId);
+  if (!group) return `<p>Group not found. <a data-nav="/groups">Back to groups</a></p>`;
+
+  const members = DB.groupMembers.filter(m => m.groupId === groupId);
+  const expenses = DB.expenses.filter(e => e.groupId === groupId).sort((a, b) => new Date(b.expenseDate) - new Date(a.expenseDate));
+  const net = getNetBalances(groupId);
+  const balances = simplifyDebts(net);
+  const settlements = DB.settlements.filter(s => s.groupId === groupId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  const tab = window.__groupTab || 'Expenses';
+
+  const tabs = ['Expenses', 'Balances', 'Settlements', 'Members'];
+  let tabContent = '';
+
+  if (tab === 'Expenses') {
+    tabContent = `
+      <button id="toggleExpenseForm">+ Add Expense</button>
+      <div id="expenseFormWrap" style="display:none;">${renderExpenseForm(members)}</div>
+      <table class="data-table">
+        <thead><tr><th>Title</th><th>Category</th><th>Amount</th><th>Paid By</th><th>Date</th><th></th></tr></thead>
+        <tbody>
+          ${expenses.map(e => `
+            <tr>
+              <td>${e.title}</td>
+              <td><span class="badge">${e.category}</span></td>
+              <td>₹${e.amount.toFixed(2)}</td>
+              <td>${userName(e.paidBy)}</td>
+              <td>${e.expenseDate}</td>
+              <td><button class="secondary small" data-delete-expense="${e.id}">Delete</button></td>
+            </tr>`).join('')}
+          ${expenses.length === 0 ? '<tr><td colspan="6">No expenses yet.</td></tr>' : ''}
+        </tbody>
+      </table>
+    `;
+  } else if (tab === 'Balances') {
+    tabContent = `
+      <h3>Who Owes Whom</h3>
+      ${balances.length === 0 ? '<p>All settled up! 🎉</p>' : ''}
+      <ul class="activity-list">
+        ${balances.map(b => `
+          <li>${userName(b.from)} owes ${userName(b.to)} <strong>₹${b.amount.toFixed(2)}</strong>
+            <button class="settle-btn small" data-settle="${b.from}|${b.to}|${b.amount}">Settle Up</button>
+          </li>`).join('')}
+      </ul>
+    `;
+  } else if (tab === 'Settlements') {
+    tabContent = `
+      <table class="data-table">
+        <thead><tr><th>Paid By</th><th>Paid To</th><th>Amount</th><th>Status</th><th>Settled At</th></tr></thead>
+        <tbody>
+          ${settlements.map(s => `
+            <tr>
+              <td>${userName(s.paidBy)}</td><td>${userName(s.paidTo)}</td><td>₹${s.amount.toFixed(2)}</td>
+              <td><span class="badge ${s.status === 'COMPLETED' ? 'badge-success' : 'badge-pending'}">${s.status}</span></td>
+              <td>${s.settledAt ? new Date(s.settledAt).toLocaleString() : '—'}</td>
+            </tr>`).join('')}
+          ${settlements.length === 0 ? '<tr><td colspan="5">No settlements yet.</td></tr>' : ''}
+        </tbody>
+      </table>
+    `;
+  } else if (tab === 'Members') {
+    tabContent = `
+      <ul class="activity-list">
+        ${members.map(m => `<li>${userName(m.userId)} — <span class="badge">${m.role}</span> ${m.userId === user.id ? '(you)' : ''}</li>`).join('')}
+      </ul>
+      <form class="inline-form" id="addMemberForm">
+        <input name="userId" type="number" placeholder="User ID to add (see their Profile page)" required />
+        <div id="memberError" class="error-text"></div>
+        <button type="submit">Add Member</button>
+      </form>
+      <p class="hint-text">Every registered user has a numeric User ID shown on their Profile page.</p>
+    `;
+  }
+
+  return `
+    <a data-nav="/groups" class="hint-text" style="cursor:pointer;">&larr; Back to groups</a>
+    <h2>${group.name}</h2>
+    <p class="hint-text">${group.description || ''}</p>
+    <div class="tabs">
+      ${tabs.map(t => `<button class="tab ${tab === t ? 'active' : ''}" data-tab="${t}">${t}</button>`).join('')}
+    </div>
+    <div data-group-id="${groupId}">${tabContent}</div>
+  `;
+}
+
+function renderExpenseForm(members) {
+  return `
+    <form class="inline-form expense-form" id="expenseForm">
+      <div class="form-row">
+        <input name="title" placeholder="Title" required />
+        <input name="amount" type="number" step="0.01" placeholder="Amount (₹)" required />
+      </div>
+      <div class="form-row">
+        <div>
+          <label class="field-label">Category</label>
+          <select name="category">
+            <option>FOOD</option><option>TRAVEL</option><option>ACCOMMODATION</option>
+            <option>UTILITIES</option><option>ENTERTAINMENT</option><option>MISCELLANEOUS</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Date</label>
+          <input name="expenseDate" type="date" value="${new Date().toISOString().slice(0,10)}" required />
+        </div>
+      </div>
+      <input name="description" placeholder="Description (optional)" />
+      <div class="form-row">
+        <div>
+          <label class="field-label">Paid by</label>
+          <select name="paidBy">
+            ${members.map(m => `<option value="${m.userId}">${userName(m.userId)}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Split Type</label>
+          <select name="splitType" id="splitTypeSelect">
+            <option value="EQUAL">Equal</option>
+            <option value="CUSTOM">Custom</option>
+          </select>
+        </div>
+      </div>
+      <label class="field-label">Participants</label>
+      <div class="checkbox-row" id="participantRow">
+        ${members.map(m => `
+          <label class="checkbox-item">
+            <input type="checkbox" name="participant" value="${m.userId}" checked />
+            ${userName(m.userId)}
+            <input type="number" step="0.01" class="custom-amount-input" name="customAmount_${m.userId}" placeholder="₹" style="display:none;" />
+          </label>`).join('')}
+      </div>
+      <div id="expenseError" class="error-text"></div>
+      <button type="submit">Save Expense</button>
+    </form>
+  `;
+}
+
+// ---------------------------------------------------------------------
+// Blockchain page
+// ---------------------------------------------------------------------
+function renderBlockchain(user) {
+  const txs = [...DB.blockchain].reverse();
+  return `
+    <h2>Blockchain Activity</h2>
+    <div class="banner">
+      Every expense and settlement is written as an immutable, hash-chained record.
+      Each block stores the SHA-256 hash of the previous block plus its own data —
+      exactly like a real blockchain's tamper-evidence property.
+    </div>
+    <button id="verifyChainBtn">Verify Entire Chain Integrity</button>
+    <div id="chainVerifyResult" style="margin-top:10px;"></div>
+    <table class="data-table" style="margin-top:16px;">
+      <thead><tr><th>Tx Hash</th><th>Type</th><th>Reference</th><th>Timestamp</th><th>Status</th></tr></thead>
+      <tbody>
+        ${txs.map(tx => `
+          <tr>
+            <td class="mono" title="${tx.hash}">${tx.txHash}</td>
+            <td><span class="badge ${tx.referenceType === 'EXPENSE' ? 'badge-expense' : 'badge-settlement'}">${tx.referenceType}</span></td>
+            <td>#${tx.referenceId}</td>
+            <td>${new Date(tx.timestamp).toLocaleString()}</td>
+            <td><span class="badge badge-success">${tx.status}</span></td>
+          </tr>`).join('')}
+        ${txs.length === 0 ? '<tr><td colspan="5">No blockchain activity yet.</td></tr>' : ''}
+      </tbody>
+    </table>
+  `;
+}
+
+// ---------------------------------------------------------------------
+// Profile page
+// ---------------------------------------------------------------------
+function renderProfile(user) {
+  const joinedGroups = DB.groupMembers.filter(m => m.userId === user.id)
+    .map(m => DB.groups.find(g => g.id === m.groupId)).filter(Boolean);
+  const editing = window.__editingProfile;
+
+  return `
+    <h2>Profile</h2>
+    <div class="auth-card" style="margin:16px 0;">
+      ${!editing ? `
+        <p><strong>User ID:</strong> ${user.id} <span class="hint-text">(share this with others so they can add you to a group)</span></p>
+        <p><strong>Name:</strong> ${user.name}</p>
+        <p><strong>Email:</strong> ${user.email}</p>
+        <p><strong>Phone:</strong> ${user.phone || '—'}</p>
+        <p><strong>Joined:</strong> ${new Date(user.createdAt).toLocaleString()}</p>
+        <button id="editProfileBtn">Edit Profile</button>
+      ` : `
+        <form id="editProfileForm">
+          <input name="name" value="${user.name}" required />
+          <input name="phone" value="${user.phone || ''}" placeholder="Phone" />
+          <div style="display:flex; gap:8px; margin-top:6px;">
+            <button type="submit">Save</button>
+            <button type="button" class="secondary" id="cancelEditBtn">Cancel</button>
+          </div>
+        </form>
+      `}
+    </div>
+    <h3>Joined Groups</h3>
+    <ul class="activity-list">
+      ${joinedGroups.map(g => `<li>${g.name}</li>`).join('')}
+      ${joinedGroups.length === 0 ? '<li>No groups yet.</li>' : ''}
+    </ul>
+  `;
+}
+
+// ---------------------------------------------------------------------
+// Event handlers
+// ---------------------------------------------------------------------
+function attachHandlers(user) {
+  document.querySelectorAll('[data-nav]').forEach(el => {
+    el.addEventListener('click', () => nav(el.getAttribute('data-nav')));
+  });
+
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) logoutBtn.addEventListener('click', () => { clearSession(); nav('/login'); });
+
+  // ---- Quick user switcher (demo convenience: hop between users without
+  // logging out/in — everyone shares the same localStorage DB anyway) ----
+  const userSwitcher = document.getElementById('userSwitcher');
+  if (userSwitcher) userSwitcher.addEventListener('change', () => {
+    const newId = Number(userSwitcher.value);
+    setSession(newId);
+    showToast(`Switched to ${userName(newId)}`);
+    window.__editingProfile = false;
+    route = '/dashboard';
+    render();
+  });
+
+  // ---- Login ----
+  const loginForm = document.getElementById('loginForm');
+  if (loginForm) loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(loginForm);
+    const email = fd.get('email').trim().toLowerCase();
+    const password = fd.get('password');
+    const hash = await sha256(password);
+    const found = DB.users.find(u => u.email === email && u.passwordHash === hash);
+    const errEl = document.getElementById('loginError');
+    if (!found) { errEl.textContent = 'Invalid email or password'; return; }
+    setSession(found.id);
+    nav('/dashboard');
+  });
+
+  // ---- Register ----
+  const registerForm = document.getElementById('registerForm');
+  if (registerForm) registerForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(registerForm);
+    const name = fd.get('name').trim();
+    const email = fd.get('email').trim().toLowerCase();
+    const password = fd.get('password');
+    const phone = fd.get('phone').trim();
+    const errEl = document.getElementById('registerError');
+    if (DB.users.some(u => u.email === email)) { errEl.textContent = 'Email already registered'; return; }
+    const passwordHash = await sha256(password);
+    const newUser = { id: nextId('user'), name, email, passwordHash, phone, createdAt: new Date().toISOString() };
+    DB.users.push(newUser); saveDB(DB);
+    setSession(newUser.id);
+    nav('/dashboard');
+  });
+
+  // ---- Groups: create ----
+  const toggleGroupForm = document.getElementById('toggleGroupForm');
+  if (toggleGroupForm) toggleGroupForm.addEventListener('click', () => {
+    const f = document.getElementById('createGroupForm');
+    f.style.display = f.style.display === 'none' ? 'flex' : 'none';
+  });
+  const createGroupForm = document.getElementById('createGroupForm');
+  if (createGroupForm) createGroupForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const fd = new FormData(createGroupForm);
+    const name = fd.get('name').trim();
+    const description = fd.get('description').trim();
+    const group = { id: nextId('group'), name, description, createdBy: user.id, createdAt: new Date().toISOString() };
+    DB.groups.push(group);
+    DB.groupMembers.push({ id: nextId('groupMember'), groupId: group.id, userId: user.id, role: 'ADMIN', joinedAt: new Date().toISOString() });
+    saveDB(DB);
+    window.__groupTab = 'Expenses';
+    nav(`/groups/${group.id}`);
+  });
+
+  // ---- Group detail: tabs ----
+  document.querySelectorAll('[data-tab]').forEach(el => {
+    el.addEventListener('click', () => { window.__groupTab = el.getAttribute('data-tab'); render(); });
+  });
+
+  // ---- Expense form toggle + split-type UI ----
+  const toggleExpenseForm = document.getElementById('toggleExpenseForm');
+  if (toggleExpenseForm) toggleExpenseForm.addEventListener('click', () => {
+    const wrap = document.getElementById('expenseFormWrap');
+    wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+  });
+  const splitTypeSelect = document.getElementById('splitTypeSelect');
+  if (splitTypeSelect) splitTypeSelect.addEventListener('change', () => {
+    const isCustom = splitTypeSelect.value === 'CUSTOM';
+    document.querySelectorAll('.custom-amount-input').forEach(inp => { inp.style.display = isCustom ? 'inline-block' : 'none'; });
+  });
+
+  // ---- Add expense ----
+  const expenseForm = document.getElementById('expenseForm');
+  if (expenseForm) expenseForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const groupId = Number(document.querySelector('[data-group-id]').getAttribute('data-group-id'));
+    const fd = new FormData(expenseForm);
+    const title = fd.get('title').trim();
+    const amount = round2(Number(fd.get('amount')));
+    const category = fd.get('category');
+    const description = fd.get('description').trim();
+    const expenseDate = fd.get('expenseDate');
+    const paidBy = Number(fd.get('paidBy'));
+    const splitType = fd.get('splitType');
+    const participantIds = fd.getAll('participant').map(Number);
+    const errEl = document.getElementById('expenseError');
+
+    try {
+      let participants;
+      if (splitType === 'EQUAL') {
+        participants = participantIds;
+      } else {
+        participants = participantIds.map(uid => ({ userId: uid, amount: Number(fd.get(`customAmount_${uid}`)) }));
+      }
+      const splits = calculateSplits(amount, splitType, participants);
+
+      const expense = {
+        id: nextId('expense'), groupId, title, amount, category, description,
+        expenseDate, paidBy, splitType, createdAt: new Date().toISOString()
+      };
+      DB.expenses.push(expense);
+      splits.forEach(s => DB.expenseSplits.push({ id: nextId('split'), expenseId: expense.id, userId: s.userId, shareAmount: s.shareAmount }));
+      saveDB(DB);
+
+      await recordOnChain('EXPENSE', expense.id, `${title}|${amount}|${paidBy}|${splitType}`);
+      showToast('Expense added and recorded on the blockchain ✓');
+      render();
+    } catch (err) {
+      errEl.textContent = err.message;
+    }
+  });
+
+  // ---- Delete expense ----
+  document.querySelectorAll('[data-delete-expense]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = Number(btn.getAttribute('data-delete-expense'));
+      DB.expenses = DB.expenses.filter(e => e.id !== id);
+      DB.expenseSplits = DB.expenseSplits.filter(s => s.expenseId !== id);
+      saveDB(DB);
+      showToast('Expense deleted');
+      render();
+    });
+  });
+
+  // ---- Settle up ----
+  document.querySelectorAll('[data-settle]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const [from, to, amount] = btn.getAttribute('data-settle').split('|');
+      const groupId = Number(document.querySelector('[data-group-id]').getAttribute('data-group-id'));
+      const settlement = {
+        id: nextId('settlement'), groupId, paidBy: Number(from), paidTo: Number(to),
+        amount: Number(amount), status: 'COMPLETED',
+        createdAt: new Date().toISOString(), settledAt: new Date().toISOString()
+      };
+      DB.settlements.push(settlement); saveDB(DB);
+      await recordOnChain('SETTLEMENT', settlement.id, `${from}|${to}|${amount}`);
+      showToast('Settlement recorded on the blockchain ✓');
+      render();
+    });
+  });
+
+  // ---- Add member ----
+  const addMemberForm = document.getElementById('addMemberForm');
+  if (addMemberForm) addMemberForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const groupId = Number(document.querySelector('[data-group-id]').getAttribute('data-group-id'));
+    const fd = new FormData(addMemberForm);
+    const userId = Number(fd.get('userId'));
+    const errEl = document.getElementById('memberError');
+    const exists = DB.users.find(u => u.id === userId);
+    if (!exists) { errEl.textContent = 'No user with that ID exists'; return; }
+    if (DB.groupMembers.some(m => m.groupId === groupId && m.userId === userId)) {
+      errEl.textContent = 'User is already a member of this group'; return;
+    }
+    DB.groupMembers.push({ id: nextId('groupMember'), groupId, userId, role: 'MEMBER', joinedAt: new Date().toISOString() });
+    saveDB(DB);
+    render();
+  });
+
+  // ---- Blockchain verify ----
+  const verifyChainBtn = document.getElementById('verifyChainBtn');
+  if (verifyChainBtn) verifyChainBtn.addEventListener('click', async () => {
+    const result = await verifyChainIntegrity();
+    const el = document.getElementById('chainVerifyResult');
+    el.innerHTML = result.valid
+      ? `<span class="positive">✓ Chain integrity verified — all ${DB.blockchain.length} records are consistent and untampered.</span>`
+      : `<span class="negative">✗ Tampering detected near record #${result.brokenAt}!</span>`;
+  });
+
+  // ---- Profile edit ----
+  const editProfileBtn = document.getElementById('editProfileBtn');
+  if (editProfileBtn) editProfileBtn.addEventListener('click', () => { window.__editingProfile = true; render(); });
+  const cancelEditBtn = document.getElementById('cancelEditBtn');
+  if (cancelEditBtn) cancelEditBtn.addEventListener('click', () => { window.__editingProfile = false; render(); });
+  const editProfileForm = document.getElementById('editProfileForm');
+  if (editProfileForm) editProfileForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const fd = new FormData(editProfileForm);
+    user.name = fd.get('name').trim();
+    user.phone = fd.get('phone').trim();
+    saveDB(DB);
+    window.__editingProfile = false;
+    showToast('Profile updated');
+    render();
+  });
+}
+
+// ---------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------
+render();
+</script>
+</body>
+</html>
