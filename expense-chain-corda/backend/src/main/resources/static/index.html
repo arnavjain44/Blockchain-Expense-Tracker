@@ -469,6 +469,7 @@
     grid-template-columns: 1fr 1fr;
     gap: 16px;
     margin: 16px 0;
+    align-items: start;
   }
   @media (max-width: 800px) { .analytics-grid { grid-template-columns: 1fr; } }
 
@@ -1644,6 +1645,48 @@ async function renderGroupDetail(groupId) {
       </div>
     </div>
 
+    <!-- Settlement Payment Modal -->
+    <div id="settlementModal" class="modal-overlay" style="display:none;">
+      <div class="modal-content" style="max-width:500px;">
+        <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:4px;">Initiate Debt Settlement</h3>
+        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:14px;" id="settleModalSub"></p>
+        
+        <div id="settleModalErr" class="error-text" style="margin-bottom:10px;"></div>
+
+        <form id="settlementForm">
+          <input type="hidden" name="groupId" id="settleGroupId">
+          <input type="hidden" name="paidBy" id="settlePaidBy">
+          <input type="hidden" name="paidTo" id="settlePaidTo">
+          <input type="hidden" name="maxAmount" id="settleMaxAmount">
+
+          <div style="margin-bottom:14px;">
+            <label style="font-size:0.8rem; font-weight:700; display:block; margin-bottom:6px;">Payment Option</label>
+            <div style="display:flex; align-items:center; justify-content:flex-start; gap:24px; background:var(--bg-raised); padding:12px 16px; border-radius:6px; border:1px solid var(--border);">
+              <label style="display:inline-flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; font-weight:600; white-space:nowrap;">
+                <input type="radio" name="settleType" value="FULL" checked id="settleTypeFull" style="margin:0; cursor:pointer;">
+                <span>Full Payment (<strong id="settleFullDisplay" style="color:var(--color-primary);">₹0.00</strong>)</span>
+              </label>
+              <label style="display:inline-flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; font-weight:600; white-space:nowrap;">
+                <input type="radio" name="settleType" value="PARTIAL" id="settleTypePartial" style="margin:0; cursor:pointer;">
+                <span>Partial Payment</span>
+              </label>
+            </div>
+          </div>
+
+          <div style="margin-bottom:16px;">
+            <label style="font-size:0.8rem; font-weight:700; display:block; margin-bottom:4px;">Payment Amount (₹)</label>
+            <input type="number" step="0.01" min="0.01" name="amount" id="settleAmountInput" style="width:100%; font-size:1rem; font-weight:700;" required readonly />
+            <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:4px;" id="settleAmountHelp">Settles full outstanding balance.</span>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+            <button type="button" class="secondary" id="cancelSettleModalBtn">Cancel</button>
+            <button type="submit" class="btn-success" id="submitSettleBtn">Initiate Settlement</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Tab Body -->
     <div id="groupTabBody">
       ${renderGroupTabContent(tab, groupId, members, expenses, settlements, debts)}
@@ -1679,17 +1722,18 @@ function renderGroupTabContent(tab, groupId, members, expenses, settlements, deb
         <div class="activity-list">
           ${debts.map(b => {
             const isDebtor = currentUser && b.from === currentUser.id;
+            const pendingAmt = Number(b.pendingAmount || 0);
             return `
               <div class="activity-item">
                 <div>
                   <span><b>${userName(b.from)}</b> owes <b>${userName(b.to)}</b>:</span>
                   <span style="font-size:0.95rem; font-weight:700; color:var(--color-danger); margin-left:8px;">₹${Number(b.amount).toFixed(2)}</span>
-                  ${b.pendingVerification ? `<div style="margin-top:4px;"><span class="badge badge-warning" style="font-size:0.75rem; color:var(--color-warning); font-weight:700;">Initiated (Pending Receiver Verification)</span></div>` : ''}
+                  ${b.pendingVerification ? `<div style="margin-top:4px;"><span class="badge badge-warning" style="font-size:0.75rem; color:var(--color-warning); font-weight:700;">Initiated ${pendingAmt > 0 ? '₹' + pendingAmt.toFixed(2) : ''} (Pending Receiver Verification)</span></div>` : ''}
                 </div>
                 ${b.pendingVerification ? `
                   <button class="btn secondary small" disabled title="Waiting for receiver to verify payment receipt in Inbox">Pending Verification...</button>
                 ` : isDebtor ? `
-                  <button class="btn-success small" data-settle="${groupId}|${b.from}|${b.to}|${b.amount}">Initiate Settlement</button>
+                  <button class="btn-success small" data-open-settle="${groupId}|${b.from}|${b.to}|${b.amount}">Initiate Settlement</button>
                 ` : `
                   <span style="font-size:0.78rem; color:var(--text-muted); font-weight:600; padding:4px 8px;">Unsettled</span>
                 `}
@@ -2346,35 +2390,122 @@ function attachEventHandlers() {
     });
   }
 
-  // Initiate Settlement Action
-  document.querySelectorAll('[data-settle]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const [groupId, from, to, amount] = btn.getAttribute('data-settle').split('|');
-      btn.disabled = true;
-      btn.textContent = 'Initiating...';
+  // Open Settlement Modal
+  document.querySelectorAll('[data-open-settle]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const [groupId, from, to, maxAmountStr] = btn.getAttribute('data-open-settle').split('|');
+      const maxAmt = Number(maxAmountStr);
+      const modal = document.getElementById('settlementModal');
+      const sub = document.getElementById('settleModalSub');
+      const err = document.getElementById('settleModalErr');
+      const fullDisplay = document.getElementById('settleFullDisplay');
+      const amountInput = document.getElementById('settleAmountInput');
+      const amountHelp = document.getElementById('settleAmountHelp');
+      const fullRadio = document.getElementById('settleTypeFull');
+
+      document.getElementById('settleGroupId').value = groupId;
+      document.getElementById('settlePaidBy').value = from;
+      document.getElementById('settlePaidTo').value = to;
+      document.getElementById('settleMaxAmount').value = maxAmt;
+
+      sub.innerHTML = `Settling payment from <b>${userName(Number(from))}</b> to <b>${userName(Number(to))}</b>`;
+      if (fullDisplay) fullDisplay.textContent = `₹${maxAmt.toFixed(2)}`;
+      if (err) err.textContent = '';
+      
+      if (fullRadio) fullRadio.checked = true;
+      if (amountInput) {
+        amountInput.value = maxAmt.toFixed(2);
+        amountInput.readOnly = true;
+      }
+      if (amountHelp) amountHelp.textContent = 'Settles full outstanding balance.';
+
+      if (modal) modal.style.display = 'flex';
+    });
+  });
+
+  const cancelSettleModalBtn = document.getElementById('cancelSettleModalBtn');
+  if (cancelSettleModalBtn) {
+    cancelSettleModalBtn.addEventListener('click', () => {
+      const modal = document.getElementById('settlementModal');
+      if (modal) modal.style.display = 'none';
+    });
+  }
+
+  const settleTypeFull = document.getElementById('settleTypeFull');
+  const settleTypePartial = document.getElementById('settleTypePartial');
+  const settleAmountInput = document.getElementById('settleAmountInput');
+  const settleAmountHelp = document.getElementById('settleAmountHelp');
+
+  if (settleTypeFull && settleTypePartial && settleAmountInput) {
+    settleTypeFull.addEventListener('change', () => {
+      if (settleTypeFull.checked) {
+        const maxAmt = Number(document.getElementById('settleMaxAmount').value || 0);
+        settleAmountInput.value = maxAmt.toFixed(2);
+        settleAmountInput.readOnly = true;
+        if (settleAmountHelp) settleAmountHelp.textContent = 'Settles full outstanding balance.';
+      }
+    });
+
+    settleTypePartial.addEventListener('change', () => {
+      if (settleTypePartial.checked) {
+        settleAmountInput.readOnly = false;
+        settleAmountInput.focus();
+        if (settleAmountHelp) settleAmountHelp.textContent = 'Enter partial amount (cannot exceed full debt).';
+      }
+    });
+  }
+
+  const settlementForm = document.getElementById('settlementForm');
+  if (settlementForm) {
+    settlementForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = document.getElementById('settleModalErr');
+      const submitBtn = document.getElementById('submitSettleBtn');
+      const modal = document.getElementById('settlementModal');
+
+      const groupId = Number(document.getElementById('settleGroupId').value);
+      const paidBy = Number(document.getElementById('settlePaidBy').value);
+      const paidTo = Number(document.getElementById('settlePaidTo').value);
+      const maxAmt = Number(document.getElementById('settleMaxAmount').value);
+      const amount = Number(settleAmountInput.value);
+
+      if (!amount || amount <= 0) {
+        if (err) err.textContent = 'Please enter a valid payment amount greater than ₹0.00';
+        return;
+      }
+      if (amount > maxAmt + 0.01) {
+        if (err) err.textContent = `Partial payment cannot exceed the remaining debt amount of ₹${maxAmt.toFixed(2)}`;
+        return;
+      }
+
+      if (err) err.textContent = '';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Initiating...';
+
       try {
         const res = await apiFetch('/settlements', {
           method: 'POST',
-          body: JSON.stringify({ groupId: Number(groupId), paidBy: Number(from), paidTo: Number(to), amount: Number(amount) })
+          body: JSON.stringify({ groupId, paidBy, paidTo, amount })
         });
         const data = await res.json();
         if (!res.ok) {
-          showToast(`Settlement error: ${data.error || 'Unknown'}`, true);
-          btn.disabled = false;
-          btn.textContent = 'Initiate Settlement';
+          if (err) err.textContent = data.error || 'Failed to initiate settlement';
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Initiate Settlement';
           return;
         }
 
-        showToast(data.message || 'Settlement payment initiated! Waiting for receiver verification.');
+        showToast(data.message || `Settlement payment of ₹${amount.toFixed(2)} initiated! Waiting for receiver verification.`);
+        if (modal) modal.style.display = 'none';
         await fetchPendingInboxCount();
         render();
-      } catch (err) {
-        showToast(err.message || 'Error initiating settlement', true);
-        btn.disabled = false;
-        btn.textContent = 'Initiate Settlement';
+      } catch (ex) {
+        if (err) err.textContent = ex.message || 'Error initiating settlement';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Initiate Settlement';
       }
     });
-  });
+  }
 
   // Verify Inbox Settlement Action
   document.querySelectorAll('[data-verify]').forEach(btn => {

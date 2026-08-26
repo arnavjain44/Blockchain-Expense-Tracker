@@ -130,13 +130,12 @@ public class DataStoreService {
         List<String[]> shuffledUsers = new ArrayList<>(candidateUsers);
         int userCount = 5;
 
-        String[] cities = {"Monaco", "London", "Barcelona", "Paris", "Madrid"};
+        String[] cordaNodes = DataStoreService.CORDA_NODE_X500;
 
         List<User> demoUsers = new ArrayList<>();
         for (int i = 0; i < userCount; i++) {
             String[] uData = shuffledUsers.get(i);
-            String city = cities[i % cities.length];
-            String x500 = "O=" + uData[0].replaceAll("[^a-zA-Z0-9]", "") + ",L=" + city + ",C=IN";
+            String x500 = cordaNodes[i % cordaNodes.length];
             User u = registerUser(true, uData[0], uData[1], "password", uData[2], x500);
             demoUsers.add(u);
         }
@@ -504,6 +503,16 @@ public class DataStoreService {
                         && "PENDING_VERIFICATION".equalsIgnoreCase(s.getStatus()));
     }
 
+    public double getPendingSettlementAmount(boolean isDemo, Long groupId, Long paidBy, Long paidTo) {
+        return getStore(isDemo).settlements.stream()
+                .filter(s -> s.getGroupId().equals(groupId)
+                        && s.getPaidBy().equals(paidBy)
+                        && s.getPaidTo().equals(paidTo)
+                        && "PENDING_VERIFICATION".equalsIgnoreCase(s.getStatus()))
+                .mapToDouble(Settlement::getAmount)
+                .sum();
+    }
+
     public Settlement updateSettlementStatus(boolean isDemo, Long id, String status, String cordaTxId) {
         Settlement s = getSettlementById(isDemo, id);
         if (s != null) {
@@ -572,11 +581,13 @@ public class DataStoreService {
             double settle = Math.round(Math.min(c.getValue(), d.getValue()) * 100.0) / 100.0;
 
             if (settle > 0.01) {
+                double pendingAmount = Math.round(getPendingSettlementAmount(isDemo, groupId, d.getKey(), c.getKey()) * 100.0) / 100.0;
                 Map<String, Object> item = new HashMap<>();
                 item.put("from", d.getKey());
                 item.put("to", c.getKey());
                 item.put("amount", settle);
-                item.put("pendingVerification", hasPendingSettlement(isDemo, groupId, d.getKey(), c.getKey()));
+                item.put("pendingVerification", pendingAmount > 0.01);
+                item.put("pendingAmount", pendingAmount);
                 result.add(item);
             }
 
