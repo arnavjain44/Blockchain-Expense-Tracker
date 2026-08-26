@@ -118,77 +118,25 @@ public class DataStoreService {
     private void generateRandomizedDemoData() {
         Random rand = new Random();
 
-        // 1. Large Pool of 55+ Fictional User Names
+        // 1. Exactly 5 Demo Users: 3 F1 Drivers & 2 Footballers (including Lewis Hamilton & Lionel Messi)
         List<String[]> candidateUsers = Arrays.asList(
-                new String[]{"Priya Sharma", "priya.s@demo.com", "9876543210"},
-                new String[]{"Rohan Mehta", "rohan.m@demo.com", "9876543211"},
-                new String[]{"Aisha Khan", "aisha.k@demo.com", "9876543212"},
-                new String[]{"Vikram Rao", "vikram.r@demo.com", "9876543213"},
-                new String[]{"Ananya Iyer", "ananya.i@demo.com", "9876543214"},
-                new String[]{"Kavya Nair", "kavya.n@demo.com", "9876543215"},
-                new String[]{"Aditya Joshi", "aditya.j@demo.com", "9876543216"},
-                new String[]{"Maya Chen", "maya.c@demo.com", "9876543217"},
-                new String[]{"Leo Patel", "leo.p@demo.com", "9876543218"},
-                new String[]{"Samira Roy", "samira.r@demo.com", "9876543219"},
-                new String[]{"Alex Rivera", "alex.r@demo.com", "9876543220"},
-                new String[]{"Daniel Kim", "daniel.k@demo.com", "9876543221"},
-                new String[]{"Elena Rostova", "elena.r@demo.com", "9876543222"},
-                new String[]{"Sanjay Verma", "sanjay.v@demo.com", "9876543223"},
-                new String[]{"Tara Deshmukh", "tara.d@demo.com", "9876543224"},
-                new String[]{"Carlos Silva", "carlos.s@demo.com", "9876543225"},
-                new String[]{"Naomi Osaka", "naomi.o@demo.com", "9876543226"},
-                new String[]{"Lucas Meyer", "lucas.m@demo.com", "9876543227"},
-                new String[]{"Fatima Al-Mansoor", "fatima.m@demo.com", "9876543228"},
-                new String[]{"Hiroshi Tanaka", "hiroshi.t@demo.com", "9876543229"},
-                new String[]{"Chloe Dubois", "chloe.d@demo.com", "9876543230"},
-                new String[]{"Marcus Vance", "marcus.v@demo.com", "9876543231"},
-                new String[]{"Divya Pillai", "divya.p@demo.com", "9876543232"},
-                new String[]{"Liam O'Connor", "liam.o@demo.com", "9876543233"},
-                new String[]{"Nina Petrova", "nina.p@demo.com", "9876543234"},
-                new String[]{"Omar Farooq", "omar.f@demo.com", "9876543235"},
-                new String[]{"Sophie Martin", "sophie.m@demo.com", "9876543236"},
-                new String[]{"Rahul Singhania", "rahul.s@demo.com", "9876543237"},
-                new String[]{"Zara Qureshi", "zara.q@demo.com", "9876543238"},
-                new String[]{"Ethan Walker", "ethan.w@demo.com", "9876543239"},
-                new String[]{"Priyanka Das", "priyanka.d@demo.com", "9876543240"},
-                new String[]{"Gabriel Santos", "gabriel.s@demo.com", "9876543241"},
-                new String[]{"Maya Lin", "maya.l@demo.com", "9876543242"},
-                new String[]{"Vikram Seth", "vikram.s@demo.com", "9876543243"},
-                new String[]{"Ananya Menon", "ananya.m@demo.com", "9876543244"},
-                new String[]{"David Novak", "david.n@demo.com", "9876543245"},
-                new String[]{"Meera Kapoor", "meera.k@demo.com", "9876543246"},
-                new String[]{"Benjamin Hayes", "benjamin.h@demo.com", "9876543247"},
-                new String[]{"Yasmin Becker", "yasmin.b@demo.com", "9876543248"},
-                new String[]{"Siddharth Malhotra", "sid.m@demo.com", "9876543249"},
-                new String[]{"Clara Oswald", "clara.o@demo.com", "9876543250"},
-                new String[]{"Tariq Mansoor", "tariq.m@demo.com", "9876543251"},
-                new String[]{"Hannah Abbott", "hannah.a@demo.com", "9876543252"},
-                new String[]{"Kunal Shah", "kunal.s@demo.com", "9876543253"},
-                new String[]{"Zoe Saldana", "zoe.s@demo.com", "9876543254"},
-                new String[]{"Arjun Reddy", "arjun.r@demo.com", "9876543255"},
-                new String[]{"Freya Lindqvist", "freya.l@demo.com", "9876543256"},
-                new String[]{"Rohan Joshi", "rohan.j@demo.com", "9876543257"},
-                new String[]{"Isabella Gomez", "isabella.g@demo.com", "9876543258"},
-                new String[]{"Devika Nambiar", "devika.n@demo.com", "9876543259"},
-                new String[]{"Julian Ross", "julian.r@demo.com", "9876543260"},
-                new String[]{"Sanya Mirza", "sanya.m@demo.com", "9876543261"},
-                new String[]{"Felix Weber", "felix.w@demo.com", "9876543262"},
-                new String[]{"Ritu Agarwal", "ritu.a@demo.com", "9876543263"},
-                new String[]{"Tanvi Deshmukh", "tanvi.d@demo.com", "9876543264"}
+                new String[]{"Lewis Hamilton", "lewis.h@demo.com", "9876543201"},
+                new String[]{"Max Verstappen", "max.v@demo.com", "9876543202"},
+                new String[]{"Charles Leclerc", "charles.l@demo.com", "9876543203"},
+                new String[]{"Lionel Messi", "lionel.m@demo.com", "9876543204"},
+                new String[]{"Cristiano Ronaldo", "cristiano.r@demo.com", "9876543205"}
         );
 
         List<String[]> shuffledUsers = new ArrayList<>(candidateUsers);
-        Collections.shuffle(shuffledUsers, rand);
-        // Randomly choose 5 to 20 users
-        int userCount = 5 + rand.nextInt(16);
+        int userCount = 5;
 
-        String[] cities = {"New Delhi", "Mumbai", "Bengaluru", "Hyderabad", "Pune", "Chennai", "Kolkata"};
+        String[] cities = {"Monaco", "London", "Barcelona", "Paris", "Madrid"};
 
         List<User> demoUsers = new ArrayList<>();
         for (int i = 0; i < userCount; i++) {
             String[] uData = shuffledUsers.get(i);
             String city = cities[i % cities.length];
-            String x500 = "O=" + uData[0] + ",L=" + city + ",C=IN";
+            String x500 = "O=" + uData[0].replaceAll("[^a-zA-Z0-9]", "") + ",L=" + city + ",C=IN";
             User u = registerUser(true, uData[0], uData[1], "password", uData[2], x500);
             demoUsers.add(u);
         }
