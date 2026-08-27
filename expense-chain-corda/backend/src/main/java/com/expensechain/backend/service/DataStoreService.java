@@ -118,16 +118,32 @@ public class DataStoreService {
     private void generateRandomizedDemoData() {
         Random rand = new Random();
 
-        // 1. Exactly 5 Demo Users: 3 F1 Drivers & 2 Footballers (including Lewis Hamilton & Lionel Messi)
+        // 1. Pool of 20 Indian Users: Randomly 5 selected on each dataset generation/seed/test run
         List<String[]> candidateUsers = Arrays.asList(
-                new String[]{"Lewis Hamilton", "lewis.h@demo.com", "9876543201"},
-                new String[]{"Max Verstappen", "max.v@demo.com", "9876543202"},
-                new String[]{"Charles Leclerc", "charles.l@demo.com", "9876543203"},
-                new String[]{"Lionel Messi", "lionel.m@demo.com", "9876543204"},
-                new String[]{"Cristiano Ronaldo", "cristiano.r@demo.com", "9876543205"}
+                new String[]{"Aarav Sharma", "aarav.s@demo.com", "9876543201"},
+                new String[]{"Vivaan Patel", "vivaan.p@demo.com", "9876543202"},
+                new String[]{"Aditya Verma", "aditya.v@demo.com", "9876543203"},
+                new String[]{"Vihaan Gupta", "vihaan.g@demo.com", "9876543204"},
+                new String[]{"Arjun Nair", "arjun.n@demo.com", "9876543205"},
+                new String[]{"Sai Iyer", "sai.i@demo.com", "9876543206"},
+                new String[]{"Reyansh Joshi", "reyansh.j@demo.com", "9876543207"},
+                new String[]{"Ayan Chatterji", "ayan.c@demo.com", "9876543208"},
+                new String[]{"Krishna Reddy", "krishna.r@demo.com", "9876543209"},
+                new String[]{"Ishaan Malhotra", "ishaan.m@demo.com", "9876543210"},
+                new String[]{"Shaurya Kapoor", "shaurya.k@demo.com", "9876543211"},
+                new String[]{"Ananya Deshmukh", "ananya.d@demo.com", "9876543212"},
+                new String[]{"Diya Sundaram", "diya.s@demo.com", "9876543213"},
+                new String[]{"Aarohi Kulkarni", "aarohi.k@demo.com", "9876543214"},
+                new String[]{"Advait Mehta", "advait.m@demo.com", "9876543215"},
+                new String[]{"Kabir Bhat", "kabir.b@demo.com", "9876543216"},
+                new String[]{"Rohan Banerjee", "rohan.b@demo.com", "9876543217"},
+                new String[]{"Aniket Rao", "aniket.r@demo.com", "9876543218"},
+                new String[]{"Pranav Agarwal", "pranav.a@demo.com", "9876543219"},
+                new String[]{"Devansh Saxena", "devansh.s@demo.com", "9876543220"}
         );
 
         List<String[]> shuffledUsers = new ArrayList<>(candidateUsers);
+        Collections.shuffle(shuffledUsers, rand);
         int userCount = 5;
 
         String[] cordaNodes = DataStoreService.CORDA_NODE_X500;
