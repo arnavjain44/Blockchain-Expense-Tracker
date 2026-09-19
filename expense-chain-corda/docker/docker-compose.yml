@@ -1,0 +1,189 @@
+version: '3.8'
+
+# Private Permissioned Corda 4.11 Network
+# Architecture: 4 logically distinct Corda nodes running on a shared Docker bridge network.
+# Identities:
+#   - Notary (London, GB)       - Consensus & Non-validating Notary
+#   - Garvit (New Delhi, IN)    - Participant Node
+#   - Arnav  (Mumbai, IN)       - Participant Node
+#   - Mridul (Bengaluru, IN)    - Participant Node
+#
+# Networking:
+#   - Internal container-to-container P2P uses Docker service names:
+#     notary:10002, garvit:10005, arnav:10008, mridul:10011
+#   - RPC ports are bound ONLY to 127.0.0.1 on the host to avoid exposing RPC to the public internet
+#   - Each node maintains isolated named volumes for persistence, logs, and messaging journals
+
+networks:
+  corda-net:
+    name: corda-net
+    driver: bridge
+
+volumes:
+  notary-persistence:
+    name: expensechain-notary-persistence
+  notary-logs:
+    name: expensechain-notary-logs
+  notary-artemis:
+    name: expensechain-notary-artemis
+  garvit-persistence:
+    name: expensechain-garvit-persistence
+  garvit-logs:
+    name: expensechain-garvit-logs
+  garvit-artemis:
+    name: expensechain-garvit-artemis
+  arnav-persistence:
+    name: expensechain-arnav-persistence
+  arnav-logs:
+    name: expensechain-arnav-logs
+  arnav-artemis:
+    name: expensechain-arnav-artemis
+  mridul-persistence:
+    name: expensechain-mridul-persistence
+  mridul-logs:
+    name: expensechain-mridul-logs
+  mridul-artemis:
+    name: expensechain-mridul-artemis
+
+services:
+  # ---------------------------------------------------------------------------
+  # 1. Notary Node (Consensus Provider)
+  # ---------------------------------------------------------------------------
+  notary:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: corda/community:4.11-zulu-openjdk8
+    container_name: notary
+    restart: unless-stopped
+    environment:
+      - ACCEPT_LICENSE=Y
+      - JVM_ARGS=-Xmx512m -Xms256m -XX:+UseG1GC
+      - CORDA_RPC_USERNAME=${CORDA_RPC_USERNAME:-user1}
+      - CORDA_RPC_PASSWORD=${CORDA_RPC_PASSWORD:-test}
+    networks:
+      - corda-net
+    ports:
+      # P2P port (internal: 10002, host: localhost-only 10002)
+      - "127.0.0.1:10002:10002"
+      # RPC port (internal: 10003, host: localhost-only 10003)
+      - "127.0.0.1:10003:10003"
+      # Admin RPC port (internal: 10023, host: localhost-only 10023)
+      - "127.0.0.1:10023:10023"
+    volumes:
+      - ./nodes/Notary/node.conf:/opt/corda/node.conf:ro
+      - ./nodes/Notary/network-parameters:/opt/corda/network-parameters:ro
+      - ./nodes/Notary/cordapps:/opt/corda/cordapps:ro
+      - ./nodes/Notary/certificates:/opt/corda/certificates
+      - ./nodes/Notary/additional-node-infos:/opt/corda/additional-node-infos
+      - notary-persistence:/opt/corda/persistence
+      - notary-logs:/opt/corda/logs
+      - notary-artemis:/opt/corda/artemis
+
+  # ---------------------------------------------------------------------------
+  # 2. Garvit Node (Participant: New Delhi)
+  # ---------------------------------------------------------------------------
+  garvit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: corda/community:4.11-zulu-openjdk8
+    container_name: garvit
+    restart: unless-stopped
+    depends_on:
+      - notary
+    environment:
+      - ACCEPT_LICENSE=Y
+      - JVM_ARGS=-Xmx512m -Xms256m -XX:+UseG1GC
+      - CORDA_RPC_USERNAME=${CORDA_RPC_USERNAME:-user1}
+      - CORDA_RPC_PASSWORD=${CORDA_RPC_PASSWORD:-test}
+    networks:
+      - corda-net
+    ports:
+      # P2P port (internal: 10005, host: localhost-only 10005)
+      - "127.0.0.1:10005:10005"
+      # RPC port (internal: 10006, host: localhost-only 10006)
+      - "127.0.0.1:10006:10006"
+      # Admin RPC port (internal: 10026, host: localhost-only 10026)
+      - "127.0.0.1:10026:10026"
+    volumes:
+      - ./nodes/Garvit/node.conf:/opt/corda/node.conf:ro
+      - ./nodes/Garvit/network-parameters:/opt/corda/network-parameters:ro
+      - ./nodes/Garvit/cordapps:/opt/corda/cordapps:ro
+      - ./nodes/Garvit/certificates:/opt/corda/certificates
+      - ./nodes/Garvit/additional-node-infos:/opt/corda/additional-node-infos
+      - garvit-persistence:/opt/corda/persistence
+      - garvit-logs:/opt/corda/logs
+      - garvit-artemis:/opt/corda/artemis
+
+  # ---------------------------------------------------------------------------
+  # 3. Arnav Node (Participant: Mumbai)
+  # ---------------------------------------------------------------------------
+  arnav:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: corda/community:4.11-zulu-openjdk8
+    container_name: arnav
+    restart: unless-stopped
+    depends_on:
+      - notary
+    environment:
+      - ACCEPT_LICENSE=Y
+      - JVM_ARGS=-Xmx512m -Xms256m -XX:+UseG1GC
+      - CORDA_RPC_USERNAME=${CORDA_RPC_USERNAME:-user1}
+      - CORDA_RPC_PASSWORD=${CORDA_RPC_PASSWORD:-test}
+    networks:
+      - corda-net
+    ports:
+      # P2P port (internal: 10008, host: localhost-only 10008)
+      - "127.0.0.1:10008:10008"
+      # RPC port (internal: 10009, host: localhost-only 10009)
+      - "127.0.0.1:10009:10009"
+      # Admin RPC port (internal: 10029, host: localhost-only 10029)
+      - "127.0.0.1:10029:10029"
+    volumes:
+      - ./nodes/Arnav/node.conf:/opt/corda/node.conf:ro
+      - ./nodes/Arnav/network-parameters:/opt/corda/network-parameters:ro
+      - ./nodes/Arnav/cordapps:/opt/corda/cordapps:ro
+      - ./nodes/Arnav/certificates:/opt/corda/certificates
+      - ./nodes/Arnav/additional-node-infos:/opt/corda/additional-node-infos
+      - arnav-persistence:/opt/corda/persistence
+      - arnav-logs:/opt/corda/logs
+      - arnav-artemis:/opt/corda/artemis
+
+  # ---------------------------------------------------------------------------
+  # 4. Mridul Node (Participant: Bengaluru)
+  # ---------------------------------------------------------------------------
+  mridul:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: corda/community:4.11-zulu-openjdk8
+    container_name: mridul
+    restart: unless-stopped
+    depends_on:
+      - notary
+    environment:
+      - ACCEPT_LICENSE=Y
+      - JVM_ARGS=-Xmx512m -Xms256m -XX:+UseG1GC
+      - CORDA_RPC_USERNAME=${CORDA_RPC_USERNAME:-user1}
+      - CORDA_RPC_PASSWORD=${CORDA_RPC_PASSWORD:-test}
+    networks:
+      - corda-net
+    ports:
+      # P2P port (internal: 10011, host: localhost-only 10011)
+      - "127.0.0.1:10011:10011"
+      # RPC port (internal: 10012, host: localhost-only 10012)
+      - "127.0.0.1:10012:10012"
+      # Admin RPC port (internal: 10032, host: localhost-only 10032)
+      - "127.0.0.1:10032:10032"
+    volumes:
+      - ./nodes/Mridul/node.conf:/opt/corda/node.conf:ro
+      - ./nodes/Mridul/network-parameters:/opt/corda/network-parameters:ro
+      - ./nodes/Mridul/cordapps:/opt/corda/cordapps:ro
+      - ./nodes/Mridul/certificates:/opt/corda/certificates
+      - ./nodes/Mridul/additional-node-infos:/opt/corda/additional-node-infos
+      - mridul-persistence:/opt/corda/persistence
+      - mridul-logs:/opt/corda/logs
+      - mridul-artemis:/opt/corda/artemis

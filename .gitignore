@@ -23,10 +23,15 @@ tools/
 **/artemis/
 **/persistence.mv.db
 **/persistence.trace.db
+**/persistence/
 **/node-info-*
+**/nodeInfo-*
 **/process-id
+**/runnodes
+**/runnodes.bat
 **/certificates/
 **/drivers/
+**/.cache/
 
 # =========================================================================
 # IDEs and Editors

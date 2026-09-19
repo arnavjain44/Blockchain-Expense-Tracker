@@ -89,3 +89,53 @@ task deployNodes(type: net.corda.plugins.Cordform, dependsOn: ['contracts-java:j
         }
     }
 }
+
+task deployDockerNodes(type: net.corda.plugins.Cordform, dependsOn: ['contracts-java:jar', 'workflows-java:jar']) {
+    directory "./docker/nodes"
+    nodeDefaults {
+        projectCordapp {
+            deploy = false
+        }
+        cordapp project(':contracts-java')
+        cordapp project(':workflows-java')
+        rpcUsers = [[ user: "user1", password: "test", permissions: ["ALL"]]]
+        extraConfig = [
+            'dataSourceProperties.dataSource.url': 'jdbc:h2:file:./persistence/persistence;DB_CLOSE_ON_EXIT=FALSE;WRITE_DELAY=0;LOCK_TIMEOUT=10000'
+        ]
+    }
+
+    node {
+        name "O=Notary,L=London,C=GB"
+        notary = [validating: false]
+        p2pAddress "notary:10002"
+        rpcSettings {
+            address("0.0.0.0:10003")
+            adminAddress("0.0.0.0:10023")
+        }
+    }
+    node {
+        name "O=Garvit,L=New Delhi,C=IN"
+        p2pAddress "garvit:10005"
+        rpcSettings {
+            address("0.0.0.0:10006")
+            adminAddress("0.0.0.0:10026")
+        }
+    }
+    node {
+        name "O=Arnav,L=Mumbai,C=IN"
+        p2pAddress "arnav:10008"
+        rpcSettings {
+            address("0.0.0.0:10009")
+            adminAddress("0.0.0.0:10029")
+        }
+    }
+    node {
+        name "O=Mridul,L=Bengaluru,C=IN"
+        p2pAddress "mridul:10011"
+        rpcSettings {
+            address("0.0.0.0:10012")
+            adminAddress("0.0.0.0:10032")
+        }
+    }
+}
+
