@@ -1,5 +1,5 @@
 # Corda 4.11 Community Node Docker Image
-FROM corda/community:4.11-zulu-openjdk8
+FROM corda/community:4.11.8-zulu-openjdk8
 
 LABEL maintainer="ExpenseChain Team"
 LABEL description="Corda 4.11 containerized node for private permissioned network"
@@ -20,4 +20,10 @@ RUN mkdir -p /opt/corda/cordapps \
              /opt/corda/artemis \
              /opt/corda/additional-node-infos
 
-# The base image provides run-corda entrypoint by default
+COPY --chown=corda:corda entrypoint.sh /opt/corda/entrypoint.sh
+
+USER root
+RUN chmod +x /opt/corda/entrypoint.sh
+USER corda
+
+ENTRYPOINT ["/opt/corda/entrypoint.sh"]
