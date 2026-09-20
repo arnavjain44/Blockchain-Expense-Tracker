@@ -6,11 +6,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -70,33 +65,18 @@ public class DataStoreService {
             expenseSplits.clear();
             settlements.clear();
         }
-
-        public void clearNonUserData() {
-            groupSeq.set(1);
-            memberSeq.set(1);
-            expenseSeq.set(1);
-            splitSeq.set(1);
-            settlementSeq.set(1);
-            groups.clear();
-            groupMembers.clear();
-            expenses.clear();
-            expenseSplits.clear();
-            settlements.clear();
-        }
     }
 
     private final StoreState mainStore = new StoreState();
     private final StoreState demoStore = new StoreState();
-    private final Path accountFile = Paths.get(System.getenv().getOrDefault("DATA_DIR", "data"), "users.db");
 
     @PostConstruct
     public void init() {
-        // Main-mode users are durable; transactional demo data remains isolated and disposable.
+        // Main store starts completely clean
         mainStore.clear();
-        loadMainUsers();
         // Seed initial fresh randomized demo data for Demo Mode
         resetDemoStore();
-        log.info("DataStoreService initialized: {} main accounts loaded; Demo Store seeded with fresh randomized data.", mainStore.users.size());
+        log.info("DataStoreService initialized: Main Store is clean; Demo Store seeded with fresh randomized data.");
     }
 
     private StoreState getStore(boolean isDemo) {
@@ -117,58 +97,12 @@ public class DataStoreService {
         }
     }
 
-    private synchronized void loadMainUsers() {
-        if (!Files.exists(accountFile)) return;
-        try {
-            long maxId = 0;
-            for (String line : Files.readAllLines(accountFile, StandardCharsets.UTF_8)) {
-                if (line.trim().isEmpty()) continue;
-                String[] fields = line.split("\\t", -1);
-                if (fields.length != 7) { log.warn("Skipping malformed account record"); continue; }
-                User user = new User(Long.parseLong(fields[0]), decode(fields[1]), decode(fields[2]), fields[3],
-                        decode(fields[4]), decode(fields[5]), decode(fields[6]));
-                mainStore.users.put(user.getId(), user);
-                maxId = Math.max(maxId, user.getId());
-            }
-            mainStore.userSeq.set(maxId + 1);
-        } catch (Exception e) {
-            throw new IllegalStateException("Unable to load durable accounts from " + accountFile, e);
-        }
-    }
-
-    private synchronized void persistMainUsers() {
-        try {
-            Path parent = accountFile.getParent();
-            if (parent != null) Files.createDirectories(parent);
-            Path temp = accountFile.resolveSibling(accountFile.getFileName() + ".tmp");
-            List<String> lines = new ArrayList<>();
-            for (User user : mainStore.users.values()) {
-                lines.add(user.getId() + "\t" + encode(user.getName()) + "\t" + encode(user.getEmail()) + "\t"
-                        + user.getPasswordHash() + "\t" + encode(user.getPhone()) + "\t"
-                        + encode(user.getCordaX500Name()) + "\t" + encode(user.getCreatedAt()));
-            }
-            Files.write(temp, lines, StandardCharsets.UTF_8);
-            Files.move(temp, accountFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-        } catch (IOException e) {
-            throw new IllegalStateException("Unable to persist account", e);
-        }
-    }
-
-    private static String encode(String value) {
-        return Base64.getUrlEncoder().encodeToString((value == null ? "" : value).getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static String decode(String value) {
-        return new String(Base64.getUrlDecoder().decode(value), StandardCharsets.UTF_8);
-    }
-
     // =========================================================================
     // DEV RESET & DEMO SEED GENERATOR
     // =========================================================================
 
     public synchronized void resetDevEnvironment(boolean seedDemo) {
-        mainStore.clearNonUserData();
+        mainStore.clear();
         demoStore.clear();
         if (seedDemo) {
             resetDemoStore();
@@ -411,15 +345,6 @@ public class DataStoreService {
     // =========================================================================
 
     public User registerUser(boolean isDemo, String name, String email, String password, String phone, String x500) {
-        if (name == null || name.trim().length() < 2) {
-            throw new IllegalArgumentException("Name must contain at least 2 characters");
-        }
-        if (email == null || !email.trim().matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
-            throw new IllegalArgumentException("Enter a valid email address");
-        }
-        if (password == null || password.length() < 8) {
-            throw new IllegalArgumentException("Password must contain at least 8 characters");
-        }
         StoreState store = getStore(isDemo);
         String cleanEmail = email.trim().toLowerCase();
         for (User u : store.users.values()) {
@@ -434,9 +359,6 @@ public class DataStoreService {
         }
         User user = new User(id, name, cleanEmail, sha256(password), phone, x500, Instant.now().toString());
         store.users.put(id, user);
-        if (!isDemo) {
-            persistMainUsers();
-        }
         return user;
     }
 

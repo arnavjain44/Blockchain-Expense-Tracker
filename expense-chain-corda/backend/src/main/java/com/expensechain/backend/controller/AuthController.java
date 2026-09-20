@@ -29,9 +29,6 @@ public class AuthController {
         boolean isDemo = resolveDemo(headerDemo, queryDemo);
         String email = body.get("email");
         String password = body.get("password");
-        if (email == null || password == null || email.trim().isEmpty() || password.isEmpty()) {
-            return ResponseEntity.badRequest().body(Collections.singletonMap("error", "Email and password are required"));
-        }
 
         User user = dataStore.authenticate(isDemo, email, password);
         if (user == null) {
@@ -42,7 +39,7 @@ public class AuthController {
 
         Map<String, Object> resp = new HashMap<>();
         resp.put("user", user);
-        resp.put("token", (isDemo ? "demo-" : "session-") + UUID.randomUUID());
+        resp.put("token", (isDemo ? "demo-token-" : "auth-token-") + user.getId());
         resp.put("isDemo", isDemo);
         return ResponseEntity.ok(resp);
     }
@@ -61,7 +58,7 @@ public class AuthController {
             User user = dataStore.registerUser(isDemo, name, email, password, phone, null);
             Map<String, Object> resp = new HashMap<>();
             resp.put("user", user);
-            resp.put("token", (isDemo ? "demo-" : "session-") + UUID.randomUUID());
+            resp.put("token", (isDemo ? "demo-token-" : "auth-token-") + user.getId());
             resp.put("isDemo", isDemo);
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
