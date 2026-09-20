@@ -75,3 +75,42 @@ See [REQUIREMENTS.md](REQUIREMENTS.md) and [requirements.txt](requirements.txt) 
 - **OS**: Windows 10 / 11 (64-bit)
 - **Memory**: 8 GB RAM minimum (16 GB recommended)
 - **Ports**: `8080`, `10002-10032` must be available.
+
+## Linux/Docker Deployment
+
+The repository now includes the Spring Boot gateway in the Docker topology. From
+`expense-chain-corda/docker`, copy `.env.example` if present (or export the
+variables below), then run:
+
+```bash
+export CORDA_RPC_USERNAME=user1
+export CORDA_RPC_PASSWORD='use-a-long-random-password'
+docker compose up -d --build
+curl http://localhost:8080/api/health
+```
+
+Only the web application port is intended to be public. Corda P2P and RPC ports
+remain bound to loopback on the host; participant-to-participant traffic uses the
+private `corda-net` bridge and the service names `garvit`, `arnav`, and `mridul`.
+The backend container connects to all three participant RPC endpoints and keeps
+account records in the named `expensechain-backend-data` volume, so a registered
+user can sign in after a restart. Do not expose Corda RPC ports through a cloud
+firewall or reverse proxy.
+
+### Functional verification
+
+1. Open the web URL and create an account with an email and an eight-character
+   minimum password.
+2. Restart the stack and sign in with the same credentials.
+3. Create an expense with at least two participants. The backend still starts
+   `AddExpenseFlow` on the payer node; the flow collects participant signatures,
+   runs `ExpenseContract`, and finalizes through the non-validating London Notary.
+4. Record a settlement. The backend still starts `RecordSettlementFlow`, which
+   is checked by `SettlementContract` and recorded in the payer and payee vaults.
+5. Use **Corda Ledger → Verify Ledger Integrity** and confirm all three participant
+   nodes are ready in `/api/health`.
+
+The default in-memory main-mode expense/group store is intentionally separate from
+the Corda vault. For a production deployment, back up the Corda named volumes and
+the backend data volume together; the CorDapp ledger remains the source of truth
+for notarized expense and settlement transactions.
