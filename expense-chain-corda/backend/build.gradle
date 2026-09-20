@@ -27,6 +27,11 @@ dependencies {
     implementation project(':contracts-java')
     implementation project(':workflows-java')
     
+    // Persistent Database & Security
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.postgresql:postgresql'
+    implementation 'org.springframework.security:spring-security-crypto'
+
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 

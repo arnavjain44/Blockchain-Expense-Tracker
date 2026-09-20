@@ -1,8 +1,14 @@
 package com.expensechain.backend.service;
 
 import com.expensechain.backend.model.*;
+import com.expensechain.backend.repository.ExpenseRepository;
+import com.expensechain.backend.repository.GroupRepository;
+import com.expensechain.backend.repository.SettlementRepository;
+import com.expensechain.backend.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -32,8 +38,24 @@ public class DataStoreService {
             "Mridul"
     };
 
+    private final UserRepository userRepository;
+    private final GroupRepository groupRepository;
+    private final ExpenseRepository expenseRepository;
+    private final SettlementRepository settlementRepository;
+    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+
+    public DataStoreService(UserRepository userRepository,
+                            GroupRepository groupRepository,
+                            ExpenseRepository expenseRepository,
+                            SettlementRepository settlementRepository) {
+        this.userRepository = userRepository;
+        this.groupRepository = groupRepository;
+        this.expenseRepository = expenseRepository;
+        this.settlementRepository = settlementRepository;
+    }
+
     /**
-     * Encapsulates an isolated data partition (Main App vs Demo Mode)
+     * Encapsulates an isolated data partition for Demo Mode
      */
     public static class StoreState {
         public final AtomicLong userSeq = new AtomicLong(1);
@@ -67,20 +89,17 @@ public class DataStoreService {
         }
     }
 
-    private final StoreState mainStore = new StoreState();
     private final StoreState demoStore = new StoreState();
 
     @PostConstruct
     public void init() {
-        // Main store starts completely clean
-        mainStore.clear();
-        // Seed initial fresh randomized demo data for Demo Mode
+        // Seed initial fresh randomized demo data for Demo Mode only
         resetDemoStore();
-        log.info("DataStoreService initialized: Main Store is clean; Demo Store seeded with fresh randomized data.");
+        log.info("DataStoreService initialized: Main Store is backed by PostgreSQL; Demo Store seeded in-memory.");
     }
 
     private StoreState getStore(boolean isDemo) {
-        return isDemo ? demoStore : mainStore;
+        return demoStore;
     }
 
     public static String sha256(String text) {
@@ -102,7 +121,6 @@ public class DataStoreService {
     // =========================================================================
 
     public synchronized void resetDevEnvironment(boolean seedDemo) {
-        mainStore.clear();
         demoStore.clear();
         if (seedDemo) {
             resetDemoStore();
@@ -345,39 +363,76 @@ public class DataStoreService {
     // =========================================================================
 
     public User registerUser(boolean isDemo, String name, String email, String password, String phone, String x500) {
-        StoreState store = getStore(isDemo);
-        String cleanEmail = email.trim().toLowerCase();
-        for (User u : store.users.values()) {
-            if (u.getEmail().equalsIgnoreCase(cleanEmail)) {
-                throw new IllegalArgumentException("Email already registered: " + cleanEmail);
-            }
+        String cleanEmail = email != null ? email.trim().toLowerCase() : "";
+        if (cleanEmail.isEmpty()) {
+            throw new IllegalArgumentException("Email cannot be empty");
         }
-        Long id = store.userSeq.getAndIncrement();
         if (x500 == null || x500.isEmpty()) {
-            int nodeIdx = (int) (id % CORDA_NODE_X500.length);
+            int nodeIdx = Math.abs(cleanEmail.hashCode()) % CORDA_NODE_X500.length;
             x500 = CORDA_NODE_X500[nodeIdx];
         }
-        User user = new User(id, name, cleanEmail, sha256(password), phone, x500, Instant.now().toString());
-        store.users.put(id, user);
-        return user;
+
+        if (isDemo) {
+            StoreState store = getStore(true);
+            for (User u : store.users.values()) {
+                if (u.getEmail().equalsIgnoreCase(cleanEmail)) {
+                    throw new IllegalArgumentException("Email already registered: " + cleanEmail);
+                }
+            }
+            Long id = store.userSeq.getAndIncrement();
+            User user = new User(id, name, cleanEmail, sha256(password), phone, x500, Instant.now().toString());
+            store.users.put(id, user);
+            return user;
+        } else {
+            if (userRepository.existsByEmail(cleanEmail)) {
+                throw new IllegalArgumentException("Email already registered: " + cleanEmail);
+            }
+            String passwordHash = passwordEncoder.encode(password);
+            User user = new User(null, name, cleanEmail, passwordHash, phone, x500, Instant.now().toString());
+            return userRepository.save(user);
+        }
     }
 
     public User authenticate(boolean isDemo, String email, String password) {
-        StoreState store = getStore(isDemo);
-        String cleanEmail = email.trim().toLowerCase();
-        String hash = sha256(password);
-        return store.users.values().stream()
-                .filter(u -> u.getEmail().equalsIgnoreCase(cleanEmail) && u.getPasswordHash().equals(hash))
-                .findFirst()
-                .orElse(null);
+        String cleanEmail = email != null ? email.trim().toLowerCase() : "";
+        if (cleanEmail.isEmpty() || password == null) return null;
+
+        if (isDemo) {
+            StoreState store = getStore(true);
+            String hash = sha256(password);
+            return store.users.values().stream()
+                    .filter(u -> u.getEmail().equalsIgnoreCase(cleanEmail) && u.getPasswordHash().equals(hash))
+                    .findFirst()
+                    .orElse(null);
+        } else {
+            User user = userRepository.findByEmail(cleanEmail);
+            if (user == null || user.getPasswordHash() == null) return null;
+            String storedHash = user.getPasswordHash();
+            boolean matches;
+            if (storedHash.startsWith("$2a$") || storedHash.startsWith("$2b$") || storedHash.startsWith("$2y$")) {
+                matches = passwordEncoder.matches(password, storedHash);
+            } else {
+                matches = sha256(password).equalsIgnoreCase(storedHash);
+            }
+            return matches ? user : null;
+        }
     }
 
     public User getUserById(boolean isDemo, Long id) {
-        return getStore(isDemo).users.get(id);
+        if (id == null) return null;
+        if (isDemo) {
+            return getStore(true).users.get(id);
+        } else {
+            return userRepository.findById(id);
+        }
     }
 
     public List<User> getAllUsers(boolean isDemo) {
-        return new ArrayList<>(getStore(isDemo).users.values());
+        if (isDemo) {
+            return new ArrayList<>(getStore(true).users.values());
+        } else {
+            return userRepository.findAll();
+        }
     }
 
     // =========================================================================
@@ -385,49 +440,78 @@ public class DataStoreService {
     // =========================================================================
 
     public Group createGroup(boolean isDemo, String name, String description, Long createdBy) {
-        StoreState store = getStore(isDemo);
-        Long id = store.groupSeq.getAndIncrement();
-        Group group = new Group(id, name, description, createdBy, Instant.now().toString());
-        store.groups.put(id, group);
-        return group;
+        if (isDemo) {
+            StoreState store = getStore(true);
+            Long id = store.groupSeq.getAndIncrement();
+            Group group = new Group(id, name, description, createdBy, Instant.now().toString());
+            store.groups.put(id, group);
+            return group;
+        } else {
+            Group group = new Group(null, name, description, createdBy, Instant.now().toString());
+            return groupRepository.save(group);
+        }
     }
 
     public Group getGroup(boolean isDemo, Long id) {
-        return getStore(isDemo).groups.get(id);
+        if (id == null) return null;
+        if (isDemo) {
+            return getStore(true).groups.get(id);
+        } else {
+            return groupRepository.findById(id);
+        }
     }
 
     public List<Group> getAllGroups(boolean isDemo) {
-        return new ArrayList<>(getStore(isDemo).groups.values());
+        if (isDemo) {
+            return new ArrayList<>(getStore(true).groups.values());
+        } else {
+            return groupRepository.findAll();
+        }
     }
 
     public List<Group> getGroupsForUser(boolean isDemo, Long userId) {
-        StoreState store = getStore(isDemo);
-        Set<Long> userGroupIds = store.groupMembers.stream()
-                .filter(m -> m.getUserId().equals(userId))
-                .map(GroupMember::getGroupId)
-                .collect(Collectors.toSet());
-        return store.groups.values().stream()
-                .filter(g -> userGroupIds.contains(g.getId()))
-                .collect(Collectors.toList());
+        if (userId == null) return Collections.emptyList();
+        if (isDemo) {
+            StoreState store = getStore(true);
+            Set<Long> userGroupIds = store.groupMembers.stream()
+                    .filter(m -> m.getUserId().equals(userId))
+                    .map(GroupMember::getGroupId)
+                    .collect(Collectors.toSet());
+            return store.groups.values().stream()
+                    .filter(g -> userGroupIds.contains(g.getId()))
+                    .collect(Collectors.toList());
+        } else {
+            return groupRepository.findGroupsForUser(userId);
+        }
     }
 
     public GroupMember addMember(boolean isDemo, Long groupId, Long userId, String role) {
-        StoreState store = getStore(isDemo);
-        boolean exists = store.groupMembers.stream()
-                .anyMatch(m -> m.getGroupId().equals(groupId) && m.getUserId().equals(userId));
-        if (exists) {
-            throw new IllegalArgumentException("User is already a member of this group");
+        if (isDemo) {
+            StoreState store = getStore(true);
+            boolean exists = store.groupMembers.stream()
+                    .anyMatch(m -> m.getGroupId().equals(groupId) && m.getUserId().equals(userId));
+            if (exists) {
+                throw new IllegalArgumentException("User is already a member of this group");
+            }
+            Long id = store.memberSeq.getAndIncrement();
+            GroupMember member = new GroupMember(id, groupId, userId, role, Instant.now().toString());
+            store.groupMembers.add(member);
+            return member;
+        } else {
+            GroupMember member = new GroupMember(null, groupId, userId, role, Instant.now().toString());
+            return groupRepository.addMember(member);
         }
-        Long id = store.memberSeq.getAndIncrement();
-        GroupMember member = new GroupMember(id, groupId, userId, role, Instant.now().toString());
-        store.groupMembers.add(member);
-        return member;
     }
 
     public List<GroupMember> getGroupMembers(boolean isDemo, Long groupId) {
-        return getStore(isDemo).groupMembers.stream()
-                .filter(m -> m.getGroupId().equals(groupId))
-                .collect(Collectors.toList());
+        if (groupId == null) return Collections.emptyList();
+        if (isDemo) {
+            return getStore(true).groupMembers.stream()
+                    .filter(m -> m.getGroupId().equals(groupId))
+                    .collect(Collectors.toList());
+        } else {
+            return groupRepository.getMembers(groupId);
+        }
     }
 
     // =========================================================================
@@ -438,32 +522,56 @@ public class DataStoreService {
                                String description, String expenseDate, Long paidBy,
                                String splitType, String cordaTxId,
                                List<Map<String, Object>> splits) {
-        StoreState store = getStore(isDemo);
-        Long id = store.expenseSeq.getAndIncrement();
-        Expense expense = new Expense(id, groupId, title, amount, category, description,
-                expenseDate, paidBy, splitType, cordaTxId, Instant.now().toString());
-        store.expenses.add(expense);
+        if (isDemo) {
+            StoreState store = getStore(true);
+            Long id = store.expenseSeq.getAndIncrement();
+            Expense expense = new Expense(id, groupId, title, amount, category, description,
+                    expenseDate, paidBy, splitType, cordaTxId, Instant.now().toString());
+            store.expenses.add(expense);
 
-        for (Map<String, Object> s : splits) {
-            Long uid = ((Number) s.get("userId")).longValue();
-            double share = ((Number) s.get("shareAmount")).doubleValue();
-            store.expenseSplits.add(new ExpenseSplit(store.splitSeq.getAndIncrement(), id, uid, share));
+            for (Map<String, Object> s : splits) {
+                Long uid = ((Number) s.get("userId")).longValue();
+                double share = ((Number) s.get("shareAmount")).doubleValue();
+                store.expenseSplits.add(new ExpenseSplit(store.splitSeq.getAndIncrement(), id, uid, share));
+            }
+
+            return expense;
+        } else {
+            Expense expense = new Expense(null, groupId, title, amount, category, description,
+                    expenseDate, paidBy, splitType, cordaTxId, Instant.now().toString());
+            List<ExpenseSplit> splitEntities = new ArrayList<>();
+            if (splits != null) {
+                for (Map<String, Object> s : splits) {
+                    Long uid = ((Number) s.get("userId")).longValue();
+                    double share = ((Number) s.get("shareAmount")).doubleValue();
+                    splitEntities.add(new ExpenseSplit(null, null, uid, share));
+                }
+            }
+            return expenseRepository.save(expense, splitEntities);
         }
-
-        return expense;
     }
 
     public List<Expense> getExpensesForGroup(boolean isDemo, Long groupId) {
-        return getStore(isDemo).expenses.stream()
-                .filter(e -> e.getGroupId().equals(groupId))
-                .sorted((a, b) -> b.getExpenseDate().compareTo(a.getExpenseDate()))
-                .collect(Collectors.toList());
+        if (groupId == null) return Collections.emptyList();
+        if (isDemo) {
+            return getStore(true).expenses.stream()
+                    .filter(e -> e.getGroupId().equals(groupId))
+                    .sorted((a, b) -> b.getExpenseDate().compareTo(a.getExpenseDate()))
+                    .collect(Collectors.toList());
+        } else {
+            return expenseRepository.findByGroupId(groupId);
+        }
     }
 
     public List<ExpenseSplit> getSplitsForExpense(boolean isDemo, Long expenseId) {
-        return getStore(isDemo).expenseSplits.stream()
-                .filter(s -> s.getExpenseId().equals(expenseId))
-                .collect(Collectors.toList());
+        if (expenseId == null) return Collections.emptyList();
+        if (isDemo) {
+            return getStore(true).expenseSplits.stream()
+                    .filter(s -> s.getExpenseId().equals(expenseId))
+                    .collect(Collectors.toList());
+        } else {
+            return expenseRepository.getSplitsForExpense(expenseId);
+        }
     }
 
     // =========================================================================
@@ -471,79 +579,122 @@ public class DataStoreService {
     // =========================================================================
 
     public Settlement saveSettlement(boolean isDemo, Long groupId, Long paidBy, Long paidTo, double amount, String cordaTxId) {
-        StoreState store = getStore(isDemo);
-        Long id = store.settlementSeq.getAndIncrement();
         String now = Instant.now().toString();
-        Settlement settlement = new Settlement(id, groupId, paidBy, paidTo, amount, "CONFIRMED_ON_CORDA", cordaTxId, now, now);
-        store.settlements.add(settlement);
-        return settlement;
+        if (isDemo) {
+            StoreState store = getStore(true);
+            Long id = store.settlementSeq.getAndIncrement();
+            Settlement settlement = new Settlement(id, groupId, paidBy, paidTo, amount, "CONFIRMED_ON_CORDA", cordaTxId, now, now);
+            store.settlements.add(settlement);
+            return settlement;
+        } else {
+            Settlement settlement = new Settlement(null, groupId, paidBy, paidTo, amount, "CONFIRMED_ON_CORDA", cordaTxId, now, now);
+            return settlementRepository.save(settlement);
+        }
     }
 
     public Settlement savePendingSettlement(boolean isDemo, Long groupId, Long paidBy, Long paidTo, double amount) {
-        StoreState store = getStore(isDemo);
-        Long id = store.settlementSeq.getAndIncrement();
         String now = Instant.now().toString();
-        Settlement settlement = new Settlement(id, groupId, paidBy, paidTo, amount, "PENDING_VERIFICATION", null, now, null);
-        store.settlements.add(settlement);
-        return settlement;
+        if (isDemo) {
+            StoreState store = getStore(true);
+            Long id = store.settlementSeq.getAndIncrement();
+            Settlement settlement = new Settlement(id, groupId, paidBy, paidTo, amount, "PENDING_VERIFICATION", null, now, null);
+            store.settlements.add(settlement);
+            return settlement;
+        } else {
+            Settlement settlement = new Settlement(null, groupId, paidBy, paidTo, amount, "PENDING_VERIFICATION", null, now, null);
+            return settlementRepository.save(settlement);
+        }
     }
 
     public Settlement getSettlementById(boolean isDemo, Long id) {
-        return getStore(isDemo).settlements.stream()
-                .filter(s -> s.getId().equals(id))
-                .findFirst()
-                .orElse(null);
+        if (id == null) return null;
+        if (isDemo) {
+            return getStore(true).settlements.stream()
+                    .filter(s -> s.getId().equals(id))
+                    .findFirst()
+                    .orElse(null);
+        } else {
+            return settlementRepository.findById(id);
+        }
     }
 
     public List<Settlement> getPendingSettlementsForUser(boolean isDemo, Long userId) {
-        return getStore(isDemo).settlements.stream()
-                .filter(s -> (s.getPaidTo().equals(userId) && "PENDING_VERIFICATION".equalsIgnoreCase(s.getStatus()))
-                        || (s.getPaidBy().equals(userId) && "REJECTED".equalsIgnoreCase(s.getStatus())))
-                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
-                .collect(Collectors.toList());
+        if (userId == null) return Collections.emptyList();
+        if (isDemo) {
+            return getStore(true).settlements.stream()
+                    .filter(s -> (s.getPaidTo().equals(userId) && "PENDING_VERIFICATION".equalsIgnoreCase(s.getStatus()))
+                            || (s.getPaidBy().equals(userId) && "REJECTED".equalsIgnoreCase(s.getStatus())))
+                    .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                    .collect(Collectors.toList());
+        } else {
+            return settlementRepository.findPendingForUser(userId);
+        }
     }
 
     public Settlement dismissSettlementRejection(boolean isDemo, Long id) {
-        Settlement s = getSettlementById(isDemo, id);
-        if (s != null && "REJECTED".equalsIgnoreCase(s.getStatus())) {
-            s.setStatus("REJECTED_DISMISSED");
+        if (isDemo) {
+            Settlement s = getSettlementById(true, id);
+            if (s != null && "REJECTED".equalsIgnoreCase(s.getStatus())) {
+                s.setStatus("REJECTED_DISMISSED");
+            }
+            return s;
+        } else {
+            settlementRepository.updateStatus(id, "REJECTED_DISMISSED", null, null);
+            return settlementRepository.findById(id);
         }
-        return s;
     }
 
     public boolean hasPendingSettlement(boolean isDemo, Long groupId, Long paidBy, Long paidTo) {
-        return getStore(isDemo).settlements.stream()
-                .anyMatch(s -> s.getGroupId().equals(groupId)
-                        && s.getPaidBy().equals(paidBy)
-                        && s.getPaidTo().equals(paidTo)
-                        && "PENDING_VERIFICATION".equalsIgnoreCase(s.getStatus()));
+        if (isDemo) {
+            return getStore(true).settlements.stream()
+                    .anyMatch(s -> s.getGroupId().equals(groupId)
+                            && s.getPaidBy().equals(paidBy)
+                            && s.getPaidTo().equals(paidTo)
+                            && "PENDING_VERIFICATION".equalsIgnoreCase(s.getStatus()));
+        } else {
+            return settlementRepository.hasPending(groupId, paidBy, paidTo);
+        }
     }
 
     public double getPendingSettlementAmount(boolean isDemo, Long groupId, Long paidBy, Long paidTo) {
-        return getStore(isDemo).settlements.stream()
-                .filter(s -> s.getGroupId().equals(groupId)
-                        && s.getPaidBy().equals(paidBy)
-                        && s.getPaidTo().equals(paidTo)
-                        && "PENDING_VERIFICATION".equalsIgnoreCase(s.getStatus()))
-                .mapToDouble(Settlement::getAmount)
-                .sum();
+        if (isDemo) {
+            return getStore(true).settlements.stream()
+                    .filter(s -> s.getGroupId().equals(groupId)
+                            && s.getPaidBy().equals(paidBy)
+                            && s.getPaidTo().equals(paidTo)
+                            && "PENDING_VERIFICATION".equalsIgnoreCase(s.getStatus()))
+                    .mapToDouble(Settlement::getAmount)
+                    .sum();
+        } else {
+            return settlementRepository.getPendingAmount(groupId, paidBy, paidTo);
+        }
     }
 
     public Settlement updateSettlementStatus(boolean isDemo, Long id, String status, String cordaTxId) {
-        Settlement s = getSettlementById(isDemo, id);
-        if (s != null) {
-            s.setStatus(status);
-            if (cordaTxId != null) s.setCordaTxId(cordaTxId);
-            s.setSettledAt(Instant.now().toString());
+        if (isDemo) {
+            Settlement s = getSettlementById(true, id);
+            if (s != null) {
+                s.setStatus(status);
+                if (cordaTxId != null) s.setCordaTxId(cordaTxId);
+                s.setSettledAt(Instant.now().toString());
+            }
+            return s;
+        } else {
+            settlementRepository.updateStatus(id, status, cordaTxId, Instant.now().toString());
+            return settlementRepository.findById(id);
         }
-        return s;
     }
 
     public List<Settlement> getSettlementsForGroup(boolean isDemo, Long groupId) {
-        return getStore(isDemo).settlements.stream()
-                .filter(s -> s.getGroupId().equals(groupId))
-                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
-                .collect(Collectors.toList());
+        if (groupId == null) return Collections.emptyList();
+        if (isDemo) {
+            return getStore(true).settlements.stream()
+                    .filter(s -> s.getGroupId().equals(groupId))
+                    .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                    .collect(Collectors.toList());
+        } else {
+            return settlementRepository.findByGroupId(groupId);
+        }
     }
 
     // =========================================================================
