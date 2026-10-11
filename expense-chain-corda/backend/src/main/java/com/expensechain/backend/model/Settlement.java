@@ -1,5 +1,7 @@
 package com.expensechain.backend.model;
 
+import com.expensechain.backend.dto.UserDto;
+
 public class Settlement {
     private Long id;
     private Long groupId;
@@ -10,6 +12,8 @@ public class Settlement {
     private String cordaTxId;
     private String createdAt;
     private String settledAt;
+    private UserDto paidByUser;
+    private UserDto paidToUser;
 
     public Settlement() {}
 
@@ -51,4 +55,10 @@ public class Settlement {
 
     public String getSettledAt() { return settledAt; }
     public void setSettledAt(String settledAt) { this.settledAt = settledAt; }
+
+    public UserDto getPaidByUser() { return paidByUser; }
+    public void setPaidByUser(UserDto paidByUser) { this.paidByUser = paidByUser; }
+
+    public UserDto getPaidToUser() { return paidToUser; }
+    public void setPaidToUser(UserDto paidToUser) { this.paidToUser = paidToUser; }
 }

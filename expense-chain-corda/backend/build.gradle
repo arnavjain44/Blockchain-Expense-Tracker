@@ -39,3 +39,7 @@ dependencies {
 springBoot {
     mainClass = 'com.expensechain.backend.ExpenseChainApplication'
 }
+
+test {
+    useJUnitPlatform()
+}

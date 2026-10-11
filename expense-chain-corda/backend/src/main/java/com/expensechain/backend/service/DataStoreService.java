@@ -1,10 +1,12 @@
 package com.expensechain.backend.service;
 
+import com.expensechain.backend.dto.UserDto;
 import com.expensechain.backend.model.*;
 import com.expensechain.backend.repository.ExpenseRepository;
 import com.expensechain.backend.repository.GroupRepository;
 import com.expensechain.backend.repository.SettlementRepository;
 import com.expensechain.backend.repository.UserRepository;
+import com.expensechain.backend.repository.UserSessionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -42,16 +44,19 @@ public class DataStoreService {
     private final GroupRepository groupRepository;
     private final ExpenseRepository expenseRepository;
     private final SettlementRepository settlementRepository;
+    private final UserSessionRepository userSessionRepository;
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     public DataStoreService(UserRepository userRepository,
                             GroupRepository groupRepository,
                             ExpenseRepository expenseRepository,
-                            SettlementRepository settlementRepository) {
+                            SettlementRepository settlementRepository,
+                            UserSessionRepository userSessionRepository) {
         this.userRepository = userRepository;
         this.groupRepository = groupRepository;
         this.expenseRepository = expenseRepository;
         this.settlementRepository = settlementRepository;
+        this.userSessionRepository = userSessionRepository;
     }
 
     /**
@@ -64,6 +69,7 @@ public class DataStoreService {
         public final AtomicLong expenseSeq = new AtomicLong(1);
         public final AtomicLong splitSeq = new AtomicLong(1);
         public final AtomicLong settlementSeq = new AtomicLong(1);
+        public final AtomicLong sessionSeq = new AtomicLong(1);
 
         public final Map<Long, User> users = new ConcurrentHashMap<>();
         public final Map<Long, Group> groups = new ConcurrentHashMap<>();
@@ -71,6 +77,7 @@ public class DataStoreService {
         public final List<Expense> expenses = Collections.synchronizedList(new ArrayList<>());
         public final List<ExpenseSplit> expenseSplits = Collections.synchronizedList(new ArrayList<>());
         public final List<Settlement> settlements = Collections.synchronizedList(new ArrayList<>());
+        public final Map<String, UserSession> demoSessions = new ConcurrentHashMap<>();
 
         public void clear() {
             userSeq.set(1);
@@ -79,6 +86,7 @@ public class DataStoreService {
             expenseSeq.set(1);
             splitSeq.set(1);
             settlementSeq.set(1);
+            sessionSeq.set(1);
 
             users.clear();
             groups.clear();
@@ -86,6 +94,7 @@ public class DataStoreService {
             expenses.clear();
             expenseSplits.clear();
             settlements.clear();
+            demoSessions.clear();
         }
     }
 
@@ -138,26 +147,26 @@ public class DataStoreService {
 
         // 1. Pool of 20 Indian Users: Randomly 5 selected on each dataset generation/seed/test run
         List<String[]> candidateUsers = Arrays.asList(
-                new String[]{"Aarav Sharma", "aarav.s@demo.com", "9876543201"},
-                new String[]{"Vivaan Patel", "vivaan.p@demo.com", "9876543202"},
-                new String[]{"Aditya Verma", "aditya.v@demo.com", "9876543203"},
-                new String[]{"Vihaan Gupta", "vihaan.g@demo.com", "9876543204"},
-                new String[]{"Arjun Nair", "arjun.n@demo.com", "9876543205"},
-                new String[]{"Sai Iyer", "sai.i@demo.com", "9876543206"},
-                new String[]{"Reyansh Joshi", "reyansh.j@demo.com", "9876543207"},
-                new String[]{"Ayan Chatterji", "ayan.c@demo.com", "9876543208"},
-                new String[]{"Krishna Reddy", "krishna.r@demo.com", "9876543209"},
-                new String[]{"Ishaan Malhotra", "ishaan.m@demo.com", "9876543210"},
-                new String[]{"Shaurya Kapoor", "shaurya.k@demo.com", "9876543211"},
-                new String[]{"Ananya Deshmukh", "ananya.d@demo.com", "9876543212"},
-                new String[]{"Diya Sundaram", "diya.s@demo.com", "9876543213"},
-                new String[]{"Aarohi Kulkarni", "aarohi.k@demo.com", "9876543214"},
-                new String[]{"Advait Mehta", "advait.m@demo.com", "9876543215"},
-                new String[]{"Kabir Bhat", "kabir.b@demo.com", "9876543216"},
-                new String[]{"Rohan Banerjee", "rohan.b@demo.com", "9876543217"},
-                new String[]{"Aniket Rao", "aniket.r@demo.com", "9876543218"},
-                new String[]{"Pranav Agarwal", "pranav.a@demo.com", "9876543219"},
-                new String[]{"Devansh Saxena", "devansh.s@demo.com", "9876543220"}
+                new String[]{"Aarav Sharma", "aarav", "aarav.s@demo.com", "9876543201", "aarav@okaxis"},
+                new String[]{"Vivaan Patel", "vivaan", "vivaan.p@demo.com", "9876543202", "vivaan@okhdfcbank"},
+                new String[]{"Aditya Verma", "aditya", "aditya.v@demo.com", "9876543203", "aditya@icici"},
+                new String[]{"Vihaan Gupta", "vihaan", "vihaan.g@demo.com", "9876543204", "vihaan@paytm"},
+                new String[]{"Arjun Nair", "arjun", "arjun.n@demo.com", "9876543205", "arjun@ybl"},
+                new String[]{"Sai Iyer", "sai", "sai.i@demo.com", "9876543206", "sai@axisbank"},
+                new String[]{"Reyansh Joshi", "reyansh", "reyansh.j@demo.com", "9876543207", "reyansh@sbi"},
+                new String[]{"Ayan Chatterji", "ayan", "ayan.c@demo.com", "9876543208", "ayan@kotak"},
+                new String[]{"Krishna Reddy", "krishna", "krishna.r@demo.com", "9876543209", "krishna@okaxis"},
+                new String[]{"Ishaan Malhotra", "ishaan", "ishaan.m@demo.com", "9876543210", "ishaan@okhdfcbank"},
+                new String[]{"Shaurya Kapoor", "shaurya", "shaurya.k@demo.com", "9876543211", "shaurya@icici"},
+                new String[]{"Ananya Deshmukh", "ananya", "ananya.d@demo.com", "9876543212", "ananya@paytm"},
+                new String[]{"Diya Sundaram", "diya", "diya.s@demo.com", "9876543213", "diya@ybl"},
+                new String[]{"Aarohi Kulkarni", "aarohi", "aarohi.k@demo.com", "9876543214", "aarohi@axisbank"},
+                new String[]{"Advait Mehta", "advait", "advait.m@demo.com", "9876543215", "advait@sbi"},
+                new String[]{"Kabir Bhat", "kabir", "kabir.b@demo.com", "9876543216", "kabir@kotak"},
+                new String[]{"Rohan Banerjee", "rohan", "rohan.b@demo.com", "9876543217", "rohan@okaxis"},
+                new String[]{"Aniket Rao", "aniket", "aniket.r@demo.com", "9876543218", "aniket@okhdfcbank"},
+                new String[]{"Pranav Agarwal", "pranav", "pranav.a@demo.com", "9876543219", "pranav@icici"},
+                new String[]{"Devansh Saxena", "devansh", "devansh.s@demo.com", "9876543220", "devansh@paytm"}
         );
 
         List<String[]> shuffledUsers = new ArrayList<>(candidateUsers);
@@ -170,7 +179,7 @@ public class DataStoreService {
         for (int i = 0; i < userCount; i++) {
             String[] uData = shuffledUsers.get(i);
             String x500 = cordaNodes[i % cordaNodes.length];
-            User u = registerUser(true, uData[0], uData[1], "password", uData[2], x500);
+            User u = registerUser(true, uData[0], uData[1], uData[2], "password", uData[3], uData[4], x500);
             demoUsers.add(u);
         }
 
@@ -359,14 +368,50 @@ public class DataStoreService {
     }
 
     // =========================================================================
-    // USER METHODS
+    // USER & SESSION METHODS
     // =========================================================================
 
+    public static final java.util.regex.Pattern USERNAME_PATTERN =
+            java.util.regex.Pattern.compile("^[a-zA-Z0-9._]{3,30}$");
+
+    public static final java.util.regex.Pattern UPI_PATTERN =
+            java.util.regex.Pattern.compile("^[a-zA-Z0-9.\\-_]{2,256}@[a-zA-Z]{2,64}$");
+
     public User registerUser(boolean isDemo, String name, String email, String password, String phone, String x500) {
+        return registerUser(isDemo, name, null, email, password, phone, null, x500);
+    }
+
+    public User registerUser(boolean isDemo, String name, String username, String email, String password, String phone, String upiId, String x500) {
         String cleanEmail = email != null ? email.trim().toLowerCase() : "";
         if (cleanEmail.isEmpty()) {
             throw new IllegalArgumentException("Email cannot be empty");
         }
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Name cannot be empty");
+        }
+        if (password == null || password.trim().isEmpty()) {
+            throw new IllegalArgumentException("Password cannot be empty");
+        }
+
+        // Username normalization & validation
+        String cleanUsername;
+        if (username != null && !username.trim().isEmpty()) {
+            cleanUsername = username.trim().toLowerCase();
+        } else {
+            String prefix = cleanEmail.split("@")[0].replaceAll("[^a-zA-Z0-9._]", "").toLowerCase();
+            cleanUsername = prefix.length() >= 3 ? prefix : (prefix + "user");
+        }
+
+        if (!USERNAME_PATTERN.matcher(cleanUsername).matches()) {
+            throw new IllegalArgumentException("Username must be 3-30 characters and contain only letters, numbers, dots or underscores");
+        }
+
+        // UPI validation (optional)
+        String cleanUpi = (upiId != null && !upiId.trim().isEmpty()) ? upiId.trim() : null;
+        if (cleanUpi != null && !UPI_PATTERN.matcher(cleanUpi).matches()) {
+            throw new IllegalArgumentException("Invalid UPI ID format (expected format: name@bankhandle)");
+        }
+
         if (x500 == null || x500.isEmpty()) {
             int nodeIdx = Math.abs(cleanEmail.hashCode()) % CORDA_NODE_X500.length;
             x500 = CORDA_NODE_X500[nodeIdx];
@@ -378,34 +423,43 @@ public class DataStoreService {
                 if (u.getEmail().equalsIgnoreCase(cleanEmail)) {
                     throw new IllegalArgumentException("Email already registered: " + cleanEmail);
                 }
+                if (u.getUsername() != null && u.getUsername().equalsIgnoreCase(cleanUsername)) {
+                    throw new IllegalArgumentException("Username already taken: " + cleanUsername);
+                }
             }
             Long id = store.userSeq.getAndIncrement();
-            User user = new User(id, name, cleanEmail, sha256(password), phone, x500, Instant.now().toString());
+            User user = new User(id, name.trim(), cleanUsername, cleanEmail, sha256(password), phone, x500, cleanUpi, Instant.now().toString());
             store.users.put(id, user);
             return user;
         } else {
             if (userRepository.existsByEmail(cleanEmail)) {
                 throw new IllegalArgumentException("Email already registered: " + cleanEmail);
             }
+            if (userRepository.existsByUsername(cleanUsername)) {
+                throw new IllegalArgumentException("Username already taken: " + cleanUsername);
+            }
             String passwordHash = passwordEncoder.encode(password);
-            User user = new User(null, name, cleanEmail, passwordHash, phone, x500, Instant.now().toString());
+            User user = new User(null, name.trim(), cleanUsername, cleanEmail, passwordHash, phone, x500, cleanUpi, Instant.now().toString());
             return userRepository.save(user);
         }
     }
 
-    public User authenticate(boolean isDemo, String email, String password) {
-        String cleanEmail = email != null ? email.trim().toLowerCase() : "";
-        if (cleanEmail.isEmpty() || password == null) return null;
+    public User authenticate(boolean isDemo, String identifier, String password) {
+        if (identifier == null || password == null) return null;
+        String cleanId = identifier.trim().toLowerCase();
+        if (cleanId.isEmpty()) return null;
 
         if (isDemo) {
             StoreState store = getStore(true);
             String hash = sha256(password);
             return store.users.values().stream()
-                    .filter(u -> u.getEmail().equalsIgnoreCase(cleanEmail) && u.getPasswordHash().equals(hash))
+                    .filter(u -> ((u.getEmail() != null && u.getEmail().equalsIgnoreCase(cleanId)) ||
+                                  (u.getUsername() != null && u.getUsername().equalsIgnoreCase(cleanId)))
+                                  && u.getPasswordHash().equals(hash))
                     .findFirst()
                     .orElse(null);
         } else {
-            User user = userRepository.findByEmail(cleanEmail);
+            User user = userRepository.findByUsernameOrEmail(cleanId);
             if (user == null || user.getPasswordHash() == null) return null;
             String storedHash = user.getPasswordHash();
             boolean matches;
@@ -415,6 +469,114 @@ public class DataStoreService {
                 matches = sha256(password).equalsIgnoreCase(storedHash);
             }
             return matches ? user : null;
+        }
+    }
+
+    public String createSession(boolean isDemo, Long userId) {
+        byte[] randomBytes = new byte[32];
+        new java.security.SecureRandom().nextBytes(randomBytes);
+        String rawToken = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+        String tokenHash = sha256(rawToken);
+        String expiresAt = Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS).toString();
+        String now = Instant.now().toString();
+
+        if (isDemo) {
+            UserSession s = new UserSession(demoStore.sessionSeq.getAndIncrement(), userId, tokenHash, expiresAt, now);
+            demoStore.demoSessions.put(tokenHash, s);
+        } else {
+            UserSession s = new UserSession(null, userId, tokenHash, expiresAt, now);
+            userSessionRepository.save(s);
+        }
+        return rawToken;
+    }
+
+    public User getAuthenticatedUser(String authHeader, boolean isDemo) {
+        if (authHeader == null || authHeader.trim().isEmpty()) return null;
+        String token = authHeader.trim();
+        if (token.startsWith("Bearer ") || token.startsWith("bearer ")) {
+            token = token.substring(7).trim();
+        }
+        if (token.isEmpty()) return null;
+        String tokenHash = sha256(token);
+
+        if (isDemo) {
+            UserSession s = demoStore.demoSessions.get(tokenHash);
+            if (s == null) return null;
+            try {
+                if (Instant.parse(s.getExpiresAt()).isBefore(Instant.now())) {
+                    demoStore.demoSessions.remove(tokenHash);
+                    return null;
+                }
+            } catch (Exception ignored) {}
+            return getUserById(true, s.getUserId());
+        } else {
+            UserSession s = userSessionRepository.findByTokenHash(tokenHash);
+            if (s == null) return null;
+            try {
+                if (Instant.parse(s.getExpiresAt()).isBefore(Instant.now())) {
+                    userSessionRepository.deleteByTokenHash(tokenHash);
+                    return null;
+                }
+            } catch (Exception ignored) {}
+            return userRepository.findById(s.getUserId());
+        }
+    }
+
+    public void revokeSession(String authHeader, boolean isDemo) {
+        if (authHeader == null || authHeader.trim().isEmpty()) return;
+        String token = authHeader.trim();
+        if (token.startsWith("Bearer ") || token.startsWith("bearer ")) {
+            token = token.substring(7).trim();
+        }
+        if (token.isEmpty()) return;
+        String tokenHash = sha256(token);
+
+        if (isDemo) {
+            demoStore.demoSessions.remove(tokenHash);
+        } else {
+            userSessionRepository.deleteByTokenHash(tokenHash);
+        }
+    }
+
+    public User updateUpiId(boolean isDemo, Long userId, String upiId) {
+        if (userId == null) return null;
+        String cleanUpi = (upiId != null && !upiId.trim().isEmpty()) ? upiId.trim() : null;
+        if (cleanUpi != null && !UPI_PATTERN.matcher(cleanUpi).matches()) {
+            throw new IllegalArgumentException("Invalid UPI ID format (expected format: name@bankhandle)");
+        }
+        if (isDemo) {
+            User u = demoStore.users.get(userId);
+            if (u != null) {
+                u.setUpiId(cleanUpi);
+            }
+            return u;
+        } else {
+            userRepository.updateUpiId(userId, cleanUpi);
+            return userRepository.findById(userId);
+        }
+    }
+
+    public User findUserByIdentifier(boolean isDemo, String identifier) {
+        if (identifier == null || identifier.trim().isEmpty()) return null;
+        String clean = identifier.trim().toLowerCase();
+        if (isDemo) {
+            return demoStore.users.values().stream()
+                    .filter(u -> (u.getEmail() != null && u.getEmail().equalsIgnoreCase(clean)) ||
+                                 (u.getUsername() != null && u.getUsername().equalsIgnoreCase(clean)))
+                    .findFirst()
+                    .orElse(null);
+        } else {
+            return userRepository.findByUsernameOrEmail(clean);
+        }
+    }
+
+    public boolean isUserMemberOfGroup(boolean isDemo, Long groupId, Long userId) {
+        if (groupId == null || userId == null) return false;
+        if (isDemo) {
+            return demoStore.groupMembers.stream()
+                    .anyMatch(m -> m.getGroupId().equals(groupId) && m.getUserId().equals(userId));
+        } else {
+            return groupRepository.isMember(groupId, userId);
         }
     }
 
@@ -486,6 +648,7 @@ public class DataStoreService {
     }
 
     public GroupMember addMember(boolean isDemo, Long groupId, Long userId, String role) {
+        GroupMember member;
         if (isDemo) {
             StoreState store = getStore(true);
             boolean exists = store.groupMembers.stream()
@@ -494,24 +657,36 @@ public class DataStoreService {
                 throw new IllegalArgumentException("User is already a member of this group");
             }
             Long id = store.memberSeq.getAndIncrement();
-            GroupMember member = new GroupMember(id, groupId, userId, role, Instant.now().toString());
+            member = new GroupMember(id, groupId, userId, role, Instant.now().toString());
             store.groupMembers.add(member);
-            return member;
         } else {
-            GroupMember member = new GroupMember(null, groupId, userId, role, Instant.now().toString());
-            return groupRepository.addMember(member);
+            GroupMember gm = new GroupMember(null, groupId, userId, role, Instant.now().toString());
+            member = groupRepository.addMember(gm);
         }
+        User u = getUserById(isDemo, userId);
+        if (u != null) {
+            member.setUser(UserDto.fromUser(u));
+        }
+        return member;
     }
 
     public List<GroupMember> getGroupMembers(boolean isDemo, Long groupId) {
         if (groupId == null) return Collections.emptyList();
+        List<GroupMember> members;
         if (isDemo) {
-            return getStore(true).groupMembers.stream()
+            members = getStore(true).groupMembers.stream()
                     .filter(m -> m.getGroupId().equals(groupId))
                     .collect(Collectors.toList());
         } else {
-            return groupRepository.getMembers(groupId);
+            members = groupRepository.getMembers(groupId);
         }
+        for (GroupMember m : members) {
+            User u = getUserById(isDemo, m.getUserId());
+            if (u != null) {
+                m.setUser(UserDto.fromUser(u));
+            }
+        }
+        return members;
     }
 
     // =========================================================================
@@ -620,15 +795,23 @@ public class DataStoreService {
 
     public List<Settlement> getPendingSettlementsForUser(boolean isDemo, Long userId) {
         if (userId == null) return Collections.emptyList();
+        List<Settlement> list;
         if (isDemo) {
-            return getStore(true).settlements.stream()
+            list = getStore(true).settlements.stream()
                     .filter(s -> (s.getPaidTo().equals(userId) && "PENDING_VERIFICATION".equalsIgnoreCase(s.getStatus()))
                             || (s.getPaidBy().equals(userId) && "REJECTED".equalsIgnoreCase(s.getStatus())))
                     .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                     .collect(Collectors.toList());
         } else {
-            return settlementRepository.findPendingForUser(userId);
+            list = settlementRepository.findPendingForUser(userId);
         }
+        for (Settlement s : list) {
+            User payer = getUserById(isDemo, s.getPaidBy());
+            User payee = getUserById(isDemo, s.getPaidTo());
+            if (payer != null) s.setPaidByUser(UserDto.fromUser(payer));
+            if (payee != null) s.setPaidToUser(UserDto.fromUser(payee));
+        }
+        return list;
     }
 
     public Settlement dismissSettlementRejection(boolean isDemo, Long id) {

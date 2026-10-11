@@ -705,6 +705,22 @@
     border-bottom-color: var(--color-primary);
     background: transparent;
   }
+
+  .user-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .user-chip:hover {
+    background: var(--border);
+  }
+
 </style>
 </head>
 <body class="theme-dark">
@@ -715,7 +731,7 @@
    R3 Corda DLT Shared Expense Settlement Frontend
    ========================================================================= */
 
-const API_BASE = '/api';
+const API_BASE = (typeof window !== 'undefined' && window.API_BASE_URL) ? window.API_BASE_URL : '/api';
 const AUTH_TOKEN_KEY = 'expensechain_auth_token';
 const DEMO_MODE_KEY = 'expensechain_is_demo';
 const ACTIVE_USER_ID_KEY = 'expensechain_active_user_id';
@@ -723,7 +739,7 @@ const THEME_KEY = 'expensechain_theme';
 
 let isDemoMode = localStorage.getItem(DEMO_MODE_KEY) === 'true';
 let currentUser = null;
-let allUsers = [];
+const userCache = new Map();
 let pendingInboxCount = 0;
 let route = location.hash.replace('#', '') || '/dashboard';
 window.__groupTab = 'Expenses';
@@ -759,6 +775,41 @@ function closeSettingsMenu() {
   if (dropdown) dropdown.style.display = 'none';
 }
 window.addEventListener('click', () => closeSettingsMenu());
+
+// -------------------------------------------------------------------------
+// User Cache & Utilities
+// -------------------------------------------------------------------------
+function registerKnownUser(u) {
+  if (!u || !u.id) return;
+  userCache.set(Number(u.id), u);
+}
+
+function userName(id) {
+  const uid = Number(id);
+  if (currentUser && currentUser.id === uid) return currentUser.name;
+  const u = userCache.get(uid);
+  return (u && u.name) ? u.name : `User #${uid}`;
+}
+
+function userHandle(id) {
+  const uid = Number(id);
+  if (currentUser && currentUser.id === uid) return currentUser.username ? `@${currentUser.username}` : '';
+  const u = userCache.get(uid);
+  return (u && u.username) ? `@${u.username}` : '';
+}
+
+function copyText(text, msg = 'Copied to clipboard ✓') {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => showToast(msg)).catch(() => {});
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); showToast(msg); } catch(e){}
+    document.body.removeChild(ta);
+  }
+}
 
 // -------------------------------------------------------------------------
 // API Helper
@@ -811,30 +862,40 @@ async function initDemoSession() {
     const res = await apiFetch('/demo/session');
     if (res.ok) {
       const data = await res.json();
-      allUsers = data.users || [];
-      const savedUid = Number(localStorage.getItem(ACTIVE_USER_ID_KEY));
-      currentUser = allUsers.find(u => u.id === savedUid) || data.activeUser || allUsers[0] || null;
+      currentUser = data.activeUser || null;
       if (currentUser) {
+        registerKnownUser(currentUser);
         localStorage.setItem(ACTIVE_USER_ID_KEY, currentUser.id);
       }
+    } else {
+      currentUser = null;
     }
   } catch (e) {
     console.error('Error initializing demo session:', e);
+    currentUser = null;
   }
 }
 
 async function initMainSession() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) {
+    currentUser = null;
+    return;
+  }
   try {
-    const res = await apiFetch('/auth/users');
+    const res = await apiFetch('/auth/me');
     if (res.ok) {
-      allUsers = await res.json();
-      const savedUid = Number(localStorage.getItem(ACTIVE_USER_ID_KEY));
-      if (savedUid) {
-        currentUser = allUsers.find(u => u.id === savedUid) || null;
-      }
+      currentUser = await res.json();
+      registerKnownUser(currentUser);
+      localStorage.setItem(ACTIVE_USER_ID_KEY, currentUser.id);
+    } else {
+      currentUser = null;
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(ACTIVE_USER_ID_KEY);
     }
   } catch (e) {
-    console.error('Error fetching main users:', e);
+    console.error('Error restoring session:', e);
+    currentUser = null;
   }
 }
 
@@ -866,7 +927,7 @@ async function fetchPendingInboxCount() {
     return;
   }
   try {
-    const res = await apiFetch(`/settlements/pending?userId=${currentUser.id}`);
+    const res = await apiFetch('/settlements/pending');
     if (res.ok) {
       const items = await res.json();
       pendingInboxCount = items.length;
@@ -938,45 +999,65 @@ function renderNavbar() {
     </div>
     <div class="navbar-right">
       ${isDemoMode ? '<span class="test-indicator">TEST</span>' : '<span class="main-indicator">MAIN</span>'}
-      <select class="user-switcher" id="userSwitcher" title="Switch viewing user">
-        ${allUsers.map(u => `<option value="${u.id}" ${currentUser && u.id === currentUser.id ? 'selected' : ''}>${u.name}</option>`).join('')}
-      </select>
+      ${currentUser ? `
+        <div class="user-chip" data-nav="/profile" title="View Profile & Settings">
+          <span style="width:22px; height:22px; border-radius:50%; background:var(--color-primary); color:#fff; font-size:0.75rem; font-weight:700; display:flex; align-items:center; justify-content:center;">
+            ${(currentUser.name || 'U').charAt(0).toUpperCase()}
+          </span>
+          <span style="font-size:0.82rem; font-weight:700; color:var(--text-heading);">${currentUser.name}</span>
+          ${currentUser.username ? `<span style="font-size:0.75rem; color:var(--text-muted); font-weight:500;">@${currentUser.username}</span>` : ''}
+        </div>
+      ` : ''}
       <button class="dots-btn" id="dotsMenuBtn" onclick="toggleSettingsMenu(event)" aria-label="Menu">⋯</button>
       <div class="settings-dropdown" id="settingsDropdown" style="display:none;">
-        <button class="menu-item" onclick="setTheme('light')">Light</button>
-        <button class="menu-item" onclick="setTheme('dark')">Dark</button>
+        <button class="menu-item" onclick="setTheme('light')">Light Theme</button>
+        <button class="menu-item" onclick="setTheme('dark')">Dark Theme</button>
         <div class="menu-divider"></div>
-        <button class="menu-item" onclick="handleReset()">Reset</button>
-        <button class="menu-item" onclick="handleSwitchToMain()">Main</button>
-        <button class="menu-item" onclick="handleExit()">Exit</button>
+        ${currentUser ? `<button class="menu-item" onclick="nav('/profile'); closeSettingsMenu();">Profile & UPI Settings</button>` : ''}
+        ${isDemoMode ? `
+          <button class="menu-item" onclick="handleReset()">Re-seed Test Data</button>
+          <button class="menu-item" onclick="handleSwitchToMain()">Switch to Main</button>
+        ` : ''}
+        ${currentUser ? `
+          <button class="menu-item" style="color:var(--color-danger);" onclick="handleLogout()">Sign Out</button>
+        ` : `
+          <button class="menu-item" onclick="nav('/login'); closeSettingsMenu();">Sign In</button>
+        `}
       </div>
     </div>
   </nav>`;
 }
 
-async function handleReset() {
+async function handleLogout() {
   closeSettingsMenu();
   try {
-    if (isDemoMode) {
-      const res = await apiFetch('/demo/reset', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        allUsers = data.users || [];
-        currentUser = data.activeUser || allUsers[0];
+    await apiFetch('/auth/logout', { method: 'POST' });
+  } catch (e) {}
+  currentUser = null;
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(ACTIVE_USER_ID_KEY);
+  showToast('Signed out successfully');
+  nav('/login');
+  render();
+}
+
+async function handleReset() {
+  closeSettingsMenu();
+  if (!isDemoMode) {
+    showToast('Reset operation is disabled in main mode', true);
+    return;
+  }
+  try {
+    const res = await apiFetch('/demo/reset', { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      currentUser = data.activeUser || null;
+      if (currentUser) {
+        registerKnownUser(currentUser);
         localStorage.setItem(ACTIVE_USER_ID_KEY, currentUser.id);
-        showToast('Test dataset re-generated with fresh fictional users ✓');
-        render();
       }
-    } else {
-      const res = await apiFetch('/dev/reset', { method: 'POST' });
-      if (res.ok) {
-        currentUser = null;
-        localStorage.removeItem(ACTIVE_USER_ID_KEY);
-        localStorage.removeItem(AUTH_TOKEN_KEY);
-        showToast('Development environment reset ✓');
-        nav('/login');
-        render();
-      }
+      showToast('Test dataset re-generated with fresh fictional users ✓');
+      render();
     }
   } catch (e) {
     showToast('Reset failed', true);
@@ -988,11 +1069,10 @@ async function handleSwitchToMain() {
   isDemoMode = false;
   localStorage.setItem(DEMO_MODE_KEY, 'false');
   currentUser = null;
-  allUsers = [];
   localStorage.removeItem(ACTIVE_USER_ID_KEY);
   localStorage.removeItem(AUTH_TOKEN_KEY);
   await initMainSession();
-  nav('/login');
+  nav(currentUser ? '/dashboard' : '/login');
   render();
 }
 
@@ -1000,11 +1080,9 @@ async function handleExit() {
   closeSettingsMenu();
   isDemoMode = false;
   currentUser = null;
-  allUsers = [];
   localStorage.removeItem(DEMO_MODE_KEY);
   localStorage.removeItem(ACTIVE_USER_ID_KEY);
   localStorage.removeItem(AUTH_TOKEN_KEY);
-  await initMainSession();
   nav('/login');
   render();
 }
@@ -1034,12 +1112,12 @@ function renderLogin() {
 
       <form id="loginForm">
         <div style="margin-bottom:12px;">
-          <label class="field-label">Email Address</label>
-          <input name="email" type="email" placeholder="name@example.com" required />
+          <label class="field-label">Username or Email Address</label>
+          <input name="identifier" type="text" placeholder="username or name@example.com" required autocomplete="username" />
         </div>
         <div style="margin-bottom:16px;">
           <label class="field-label">Password</label>
-          <input name="password" type="password" placeholder="Password" required />
+          <input name="password" type="password" placeholder="Password" required autocomplete="current-password" />
         </div>
         <div id="loginError" class="error-text"></div>
         <button type="submit" style="width:100%; margin-top:8px;" id="loginSubmitBtn">Sign In</button>
@@ -1071,19 +1149,28 @@ function renderRegister() {
       <form id="registerForm">
         <div style="margin-bottom:12px;">
           <label class="field-label">Full Name</label>
-          <input name="name" placeholder="Full name" required />
+          <input name="name" placeholder="Full name (e.g. Garvit Singhal)" required />
+        </div>
+        <div style="margin-bottom:12px;">
+          <label class="field-label">Username</label>
+          <input name="username" placeholder="Choose a unique username (e.g. garvit_s)" required autocomplete="username" />
         </div>
         <div style="margin-bottom:12px;">
           <label class="field-label">Email Address</label>
-          <input name="email" type="email" placeholder="name@example.com" required />
+          <input name="email" type="email" placeholder="name@example.com" required autocomplete="email" />
         </div>
         <div style="margin-bottom:12px;">
           <label class="field-label">Password</label>
-          <input name="password" type="password" placeholder="Create password" required />
+          <input name="password" type="password" placeholder="Create password" required autocomplete="new-password" />
+        </div>
+        <div style="margin-bottom:12px;">
+          <label class="field-label">Phone Number (Optional)</label>
+          <input name="phone" placeholder="+91 98765 43210" />
         </div>
         <div style="margin-bottom:16px;">
-          <label class="field-label">Phone Number (Optional)</label>
-          <input name="phone" placeholder="Phone number" />
+          <label class="field-label">UPI ID / VPA (Optional)</label>
+          <input name="upiId" placeholder="name@bankhandle (e.g. garvit@okhdfcbank)" />
+          <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:4px;">For receiving debt settlements directly via UPI.</span>
         </div>
         <div id="registerError" class="error-text"></div>
         <button type="submit" style="width:100%;" id="registerSubmitBtn">Create Account</button>
@@ -1097,9 +1184,9 @@ function renderRegister() {
 // -------------------------------------------------------------------------
 async function renderDashboard() {
   if (!currentUser) {
-    return `<div class="card" style="text-align:center; padding:30px;"><p style="color:var(--text-muted);">Please select or create an account to view the dashboard.</p></div>`;
+    return `<div class="card" style="text-align:center; padding:30px;"><p style="color:var(--text-muted);">Please sign in to view your dashboard.</p></div>`;
   }
-  const groupsRes = await apiFetch(`/groups?userId=${currentUser.id}`);
+  const groupsRes = await apiFetch(`/groups`);
   const groups = groupsRes.ok ? await groupsRes.json() : [];
 
   let totalOwe = 0, totalOwed = 0;
@@ -1112,6 +1199,9 @@ async function renderDashboard() {
     const dRes = await apiFetch(`/groups/${g.id}`);
     if (dRes.ok) {
       const detail = await dRes.json();
+      if (detail.members) {
+        detail.members.forEach(m => registerKnownUser(m.user));
+      }
       if (detail.netBalances && detail.netBalances[currentUser.id]) {
         const net = detail.netBalances[currentUser.id];
         if (net > 0) totalOwed += net;
@@ -1120,239 +1210,188 @@ async function renderDashboard() {
       if (detail.expenses) {
         detail.expenses.forEach(e => {
           allExpenses.push(e);
+          if (categoryTotals[e.category] !== undefined) {
+            categoryTotals[e.category] += Number(e.amount);
+          }
+          grandTotalSpent += Number(e.amount);
           recentActivities.push({
-            type: 'EXPENSE', title: e.title, amount: e.amount, tx: e.cordaTxId, date: e.expenseDate || e.createdAt, group: g.name
-          });
-          const cat = e.category || 'MISCELLANEOUS';
-          categoryTotals[cat] = (categoryTotals[cat] || 0) + e.amount;
-          grandTotalSpent += e.amount;
-        });
-      }
-      if (detail.settlements) {
-        detail.settlements.forEach(s => {
-          recentActivities.push({
-            type: 'SETTLEMENT', title: `${userName(s.paidBy)} → ${userName(s.paidTo)}`, amount: s.amount, tx: s.cordaTxId, date: s.createdAt, group: g.name
+            type: 'EXPENSE',
+            title: e.title,
+            amount: e.amount,
+            groupName: g.name,
+            paidBy: e.paidBy,
+            date: e.expenseDate || e.createdAt
           });
         });
       }
     }
   }
 
-  const netBalance = Math.round((totalOwed - totalOwe) * 100) / 100;
-  recentActivities.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-
-  // User Owing Limit
-  const savedLimitKey = `owing_limit_${currentUser.id}`;
-  const owingLimit = Number(localStorage.getItem(savedLimitKey)) || 10000;
+  const netBalance = totalOwed - totalOwe;
+  const owingLimit = Number(localStorage.getItem(`owing_limit_${currentUser.id}`)) || 10000;
 
   return `
-    <!-- Metric Cards -->
-    <div class="card-grid">
-      <div class="stat-card">
-        <div class="stat-header">
-          <span class="stat-label">Net Balance</span>
-          <div class="stat-icon">₹</div>
-        </div>
-        <div class="stat-value ${netBalance >= 0 ? 'positive' : 'negative'}">
+    <div style="margin-bottom:20px;">
+      <h2 style="font-size:1.4rem; font-weight:800;">Welcome, ${currentUser.name}</h2>
+      <p style="font-size:0.82rem; color:var(--text-muted);">Corda Legal Identity: <span class="mono">${currentUser.cordaX500Name || 'O=Party,L=New Delhi,C=IN'}</span></p>
+    </div>
+
+    <!-- Summary Metrics Cards -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <span class="metric-label">You Owe</span>
+        <div class="metric-value danger">₹${totalOwe.toFixed(2)}</div>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">You are Owed</span>
+        <div class="metric-value success">₹${totalOwed.toFixed(2)}</div>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Net Balance</span>
+        <div class="metric-value ${netBalance >= 0 ? 'success' : 'danger'}">
           ${netBalance >= 0 ? '+' : ''}₹${netBalance.toFixed(2)}
         </div>
-        <div class="stat-footer">
-          ${netBalance > 0 ? 'Positive balance' : netBalance < 0 ? 'Negative balance' : 'Balanced'}
-        </div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-header">
-          <span class="stat-label">You Owe</span>
-          <div class="stat-icon">↗</div>
-        </div>
-        <div class="stat-value negative">₹${totalOwe.toFixed(2)}</div>
-        <div class="stat-footer">Pending claims</div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-header">
-          <span class="stat-label">Owed to You</span>
-          <div class="stat-icon">↙</div>
-        </div>
-        <div class="stat-value positive">₹${totalOwed.toFixed(2)}</div>
-        <div class="stat-footer">Incoming claims</div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-header">
-          <span class="stat-label">Active Groups</span>
-          <div class="stat-icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-          </div>
-        </div>
-        <div class="stat-value">${groups.length}</div>
-        <div class="stat-footer"><a data-nav="/groups" style="color:var(--color-primary); text-decoration:none; font-weight:700;">View groups</a></div>
       </div>
     </div>
 
-    <!-- Analytics & Group Summary -->
-    <div class="analytics-grid">
-      <!-- 3-View Analytics Card -->
-      <div class="card" id="analyticsCard">
-        ${renderAnalyticsCard(categoryTotals, grandTotalSpent, allExpenses, totalOwe, owingLimit)}
-      </div>
+    <!-- Spending Analytics Carousel Card -->
+    ${renderAnalyticsCard(categoryTotals, grandTotalSpent, allExpenses, totalOwe, owingLimit)}
 
-      <!-- Group Breakdown Card -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;" class="dashboard-grid">
+      <!-- Active Groups -->
       <div class="card">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <h3 style="font-size:0.95rem; font-weight:700;">Group Overview</h3>
-          <button class="btn small" data-nav="/groups">+ New</button>
+          <h3 style="font-size:0.95rem; font-weight:800;">Your Groups</h3>
+          <button class="secondary small" data-nav="/groups">View All</button>
         </div>
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          ${groups.map(g => `
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:var(--bg-raised); border:1px solid var(--border); border-radius:var(--radius-sm); cursor:pointer;" data-nav="/groups/${g.id}">
+        <div class="activity-list">
+          ${groups.slice(0, 4).map(g => `
+            <div class="activity-item" style="cursor:pointer;" data-nav="/groups/${g.id}">
               <div>
-                <b style="font-size:0.88rem; color:var(--text-heading);">${g.name}</b>
-                <div style="font-size:0.75rem; color:var(--text-muted);">${g.description || 'Shared pool'}</div>
+                <b>${g.name}</b>
+                <div style="font-size:0.75rem; color:var(--text-muted);">${g.description || 'Shared expense pool'}</div>
               </div>
-              <span class="badge badge-primary">Open</span>
+              <span class="badge badge-primary">View</span>
             </div>`).join('')}
-          ${groups.length === 0 ? '<p style="color:var(--text-muted); font-size:0.82rem; padding:12px 0;">No active groups.</p>' : ''}
+          ${groups.length === 0 ? '<div style="color:var(--text-muted); font-size:0.82rem; padding:10px 0;">No groups joined yet.</div>' : ''}
         </div>
       </div>
-    </div>
 
-    <!-- Recent Corda Ledger Feed -->
-    <div class="card" style="margin-top:16px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-        <h3 style="font-size:0.95rem; font-weight:700;">Recent Ledger Transactions</h3>
-        <button class="secondary small" data-nav="/blockchain">Explore</button>
-      </div>
-
-      <div class="activity-list">
-        ${recentActivities.length === 0 ? '<div style="padding:14px; text-align:center; color:var(--text-muted); font-size:0.84rem;">No ledger transactions recorded yet.</div>' : ''}
-        ${recentActivities.slice(0, 5).map(a => `
-          <div class="activity-item">
-            <div style="display:flex; align-items:center; gap:10px;">
-              <span class="badge ${a.type === 'EXPENSE' ? 'badge-expense' : 'badge-success'}">${a.type}</span>
+      <!-- Recent Ledger Activity -->
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h3 style="font-size:0.95rem; font-weight:800;">Recent Group Expenses</h3>
+          <button class="secondary small" data-nav="/blockchain">Corda Ledger</button>
+        </div>
+        <div class="activity-list">
+          ${recentActivities.slice(0, 4).map(a => `
+            <div class="activity-item">
               <div>
-                <b style="font-size:0.88rem;">${a.title}</b>
-                <div style="font-size:0.75rem; color:var(--text-muted);">${a.group} • ${a.date ? new Date(a.date).toLocaleDateString() : 'Today'}</div>
+                <b>${a.title}</b>
+                <div style="font-size:0.75rem; color:var(--text-muted);">${a.groupName} • Paid by ${userName(a.paidBy)}</div>
               </div>
-            </div>
-            <div style="display:flex; align-items:center; gap:10px;">
-              <span style="font-weight:700; font-size:0.95rem; color:var(--text-heading);">₹${Number(a.amount).toFixed(2)}</span>
-              <span class="node-tag mono" title="Corda Tx ID"><span class="node-dot"></span> ${(a.tx || '0x...').slice(0, 10)}...</span>
-            </div>
-          </div>`).join('')}
+              <strong style="font-size:0.85rem; color:var(--text-heading);">₹${Number(a.amount).toFixed(2)}</strong>
+            </div>`).join('')}
+          ${recentActivities.length === 0 ? '<div style="color:var(--text-muted); font-size:0.82rem; padding:10px 0;">No recent expense activity.</div>' : ''}
+        </div>
       </div>
     </div>
   `;
 }
 
 // -------------------------------------------------------------------------
-// Multi-View Analytics Card
+// Analytics Carousel Card
 // -------------------------------------------------------------------------
 function renderAnalyticsCard(categoryTotals, totalSpent, allExpenses, currentOwe, limit) {
   const currentView = window.__analyticsView || 1;
+  const catPeriod = window.__categoryPeriod || 'ALL';
+  const timePeriod = window.__timePeriod || 'MONTH';
 
-  let viewTitle = 'Spending by Category';
-  if (currentView === 2) viewTitle = 'Spending Over Time';
-  if (currentView === 3) viewTitle = 'Owing Limit';
-
-  let bodyHtml = '';
+  let title = '';
+  let controlsHtml = '';
+  let contentHtml = '';
 
   if (currentView === 1) {
-    // VIEW 1: CATEGORY DONUT
-    let highestCat = 'None', highestAmt = 0;
-    for (const [c, v] of Object.entries(categoryTotals)) {
-      if (v > highestAmt) { highestAmt = v; highestCat = c; }
-    }
-    const highestPercent = totalSpent > 0 ? Math.round((highestAmt / totalSpent) * 100) : 0;
-
-    bodyHtml = `
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-        <div class="period-selector">
-          <button class="period-btn ${window.__categoryPeriod === 'MONTH' ? 'active' : ''}" onclick="setCatPeriod('MONTH')">This Month</button>
-          <button class="period-btn ${window.__categoryPeriod === 'LAST_MONTH' ? 'active' : ''}" onclick="setCatPeriod('LAST_MONTH')">Last Month</button>
-          <button class="period-btn ${window.__categoryPeriod === 'ALL' ? 'active' : ''}" onclick="setCatPeriod('ALL')">All Time</button>
-        </div>
-        ${highestAmt > 0 ? `<span class="badge badge-warning" style="font-size:0.68rem; padding:1px 6px;">Highest: ${highestCat} — ₹${highestAmt.toFixed(0)} (${highestPercent}%)</span>` : ''}
-      </div>
-      <div style="display:flex; align-items:center; justify-content:center; padding:2px 0;">
-        ${renderDonutChart(categoryTotals, totalSpent)}
+    title = 'Spending by Category';
+    controlsHtml = `
+      <div style="display:flex; gap:4px;">
+        <button class="btn secondary small ${catPeriod === 'MONTH' ? 'active' : ''}" style="padding:2px 8px; font-size:0.7rem;" onclick="setCatPeriod('MONTH')">This Month</button>
+        <button class="btn secondary small ${catPeriod === 'LAST_MONTH' ? 'active' : ''}" style="padding:2px 8px; font-size:0.7rem;" onclick="setCatPeriod('LAST_MONTH')">Last Month</button>
+        <button class="btn secondary small ${catPeriod === 'ALL' ? 'active' : ''}" style="padding:2px 8px; font-size:0.7rem;" onclick="setCatPeriod('ALL')">All Time</button>
       </div>
     `;
+    contentHtml = renderDonutChart(categoryTotals, totalSpent);
   } else if (currentView === 2) {
-    // VIEW 2: SPENDING OVER TIME (BAR CHART)
-    const period = window.__timePeriod || 'MONTH';
-    const bars = computeSpendingBars(allExpenses, period);
-
-    bodyHtml = `
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <div class="period-selector">
-          <button class="period-btn ${period === 'WEEK' ? 'active' : ''}" onclick="setTimePeriod('WEEK')">Week</button>
-          <button class="period-btn ${period === 'MONTH' ? 'active' : ''}" onclick="setTimePeriod('MONTH')">Month</button>
-          <button class="period-btn ${period === 'YEAR' ? 'active' : ''}" onclick="setTimePeriod('YEAR')">Year</button>
-        </div>
+    title = 'Spending over Time';
+    controlsHtml = `
+      <div style="display:flex; gap:4px;">
+        <button class="btn secondary small ${timePeriod === 'WEEK' ? 'active' : ''}" style="padding:2px 8px; font-size:0.7rem;" onclick="setTimePeriod('WEEK')">Week</button>
+        <button class="btn secondary small ${timePeriod === 'MONTH' ? 'active' : ''}" style="padding:2px 8px; font-size:0.7rem;" onclick="setTimePeriod('MONTH')">Month</button>
+        <button class="btn secondary small ${timePeriod === 'YEAR' ? 'active' : ''}" style="padding:2px 8px; font-size:0.7rem;" onclick="setTimePeriod('YEAR')">Year</button>
       </div>
-      <div style="display:flex; align-items:flex-end; justify-content:space-around; gap:10px; padding:6px 2px 2px; height:120px;">
+    `;
+    const bars = computeSpendingBars(allExpenses, timePeriod);
+    contentHtml = `
+      <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:12px; height:120px; padding:10px 8px 0 8px; width:100%;">
         ${bars.map(b => `
-          <div style="display:flex; flex-direction:column; align-items:center; gap:4px; flex:1;" title="${b.label}: ₹${b.val.toFixed(2)}">
-            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">₹${b.val > 0 ? Math.round(b.val) : 0}</div>
-            <div style="width:100%; max-width:32px; background:var(--color-primary); height:${b.heightPercent}px; min-height:4px; border-radius:3px 3px 0 0; transition:height 0.3s ease;"></div>
-            <div style="font-size:0.7rem; color:var(--text-body); font-weight:600; text-align:center; white-space:nowrap;">${b.label}</div>
+          <div style="display:flex; flex-direction:column; align-items:center; flex:1; gap:4px;">
+            <div style="font-size:0.68rem; font-weight:700; color:var(--text-heading);">₹${b.val.toFixed(0)}</div>
+            <div style="width:100%; max-width:28px; background:var(--color-primary); height:${Math.max(4, b.heightPercent)}px; border-radius:3px 3px 0 0;"></div>
+            <div style="font-size:0.68rem; color:var(--text-muted);">${b.label}</div>
           </div>
         `).join('')}
-        ${bars.length === 0 ? '<div style="color:var(--text-muted); font-size:0.8rem;">No expense data for period</div>' : ''}
       </div>
     `;
-  } else if (currentView === 3) {
-    // VIEW 3: OWING LIMIT
-    const isExceeded = currentOwe > limit;
-    const remaining = Math.max(0, limit - currentOwe);
-    const owePercent = limit > 0 ? Math.min(100, Math.round((currentOwe / limit) * 100)) : 0;
-
-    bodyHtml = `
-      <div style="display:flex; flex-direction:column; gap:8px; padding:2px 0;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span style="font-size:0.78rem; color:var(--text-muted); font-weight:600;">Maximum amount I can owe at once</span>
-          <div style="display:flex; align-items:center; gap:6px;">
-            <input type="number" id="owingLimitInput" value="${limit}" style="width:85px; padding:3px 6px; font-size:0.8rem; font-weight:700;" />
-            <button class="btn small secondary" onclick="saveOwingLimit()">Save</button>
-          </div>
+  } else {
+    title = 'Owing Limit Health';
+    const percent = Math.min(100, Math.round((currentOwe / limit) * 100));
+    const isExceeded = currentOwe >= limit;
+    controlsHtml = `
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span style="font-size:0.72rem; color:var(--text-muted);">Max:</span>
+        <input type="number" id="owingLimitInput" value="${limit}" style="width:80px; padding:2px 6px; font-size:0.72rem;" />
+        <button class="btn secondary small" style="padding:2px 6px; font-size:0.7rem;" onclick="saveOwingLimit()">Save</button>
+      </div>
+    `;
+    contentHtml = `
+      <div style="width:100%; padding:10px 0;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.8rem;">
+          <span>Current Debt: <b>₹${currentOwe.toFixed(2)}</b></span>
+          <span>Limit: <b>₹${limit.toFixed(2)}</b> (${percent}%)</span>
         </div>
-
-        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;">
-          <div style="background:var(--bg-raised); border:1px solid var(--border); padding:8px; border-radius:var(--radius-sm); text-align:center;">
-            <div style="font-size:0.68rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Limit</div>
-            <b style="font-size:0.95rem; color:var(--text-heading);">₹${limit.toFixed(0)}</b>
-          </div>
-          <div style="background:var(--bg-raised); border:1px solid var(--border); padding:8px; border-radius:var(--radius-sm); text-align:center;">
-            <div style="font-size:0.68rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Currently Owe</div>
-            <b style="font-size:0.95rem; color:${isExceeded ? 'var(--color-danger)' : 'var(--text-heading)'};">₹${currentOwe.toFixed(0)}</b>
-          </div>
-          <div style="background:var(--bg-raised); border:1px solid var(--border); padding:8px; border-radius:var(--radius-sm); text-align:center;">
-            <div style="font-size:0.68rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Remaining</div>
-            <b style="font-size:0.95rem; color:var(--color-success);">₹${remaining.toFixed(0)}</b>
-          </div>
+        <div style="width:100%; height:12px; background:var(--bg-raised); border-radius:6px; overflow:hidden; border:1px solid var(--border);">
+          <div style="width:${percent}%; height:100%; background:${isExceeded ? 'var(--color-danger)' : (percent > 75 ? 'var(--color-warning)' : 'var(--color-success)')}; transition:width 0.3s ease;"></div>
         </div>
-
-        <!-- Progress Bar -->
-        <div style="width:100%; height:5px; background:var(--bg-raised); border-radius:3px; overflow:hidden; border:1px solid var(--border);">
-          <div style="width:${owePercent}%; height:100%; background:${isExceeded ? 'var(--color-danger)' : 'var(--color-primary)'}; transition:width 0.3s ease;"></div>
-        </div>
-
-        ${isExceeded ? `<div style="color:var(--color-danger); font-size:0.75rem; font-weight:700; display:flex; align-items:center; gap:4px;">Owing limit exceeded</div>` : ''}
+        ${isExceeded ? `
+          <div style="margin-top:8px; font-size:0.78rem; color:var(--color-danger); font-weight:700;">
+            ⚠️ Warning: You have reached your set owing limit. Please settle up debts.
+          </div>
+        ` : `
+          <div style="margin-top:8px; font-size:0.75rem; color:var(--text-muted);">
+            Within healthy debt boundaries.
+          </div>
+        `}
       </div>
     `;
   }
 
   return `
-    <div class="analytics-header" style="margin-bottom:8px;">
-      <h3 style="font-size:0.92rem; font-weight:700;">${viewTitle}</h3>
-      <div class="analytics-nav">
-        <button class="analytics-arrow-btn" onclick="prevAnalyticsView()" aria-label="Previous">‹</button>
-        <button class="analytics-arrow-btn" onclick="nextAnalyticsView()" aria-label="Next">›</button>
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <h3 style="font-size:0.95rem; font-weight:800;">${title}</h3>
+          <span style="font-size:0.7rem; color:var(--text-muted); background:var(--bg-raised); padding:1px 6px; border-radius:4px; border:1px solid var(--border);">Slide ${currentView}/3</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          ${controlsHtml}
+          <div style="display:flex; gap:4px; margin-left:6px;">
+            <button class="btn secondary small" style="padding:2px 8px; font-size:0.75rem;" onclick="prevAnalyticsView()" title="Previous slide">◀</button>
+            <button class="btn secondary small" style="padding:2px 8px; font-size:0.75rem;" onclick="nextAnalyticsView()" title="Next slide">▶</button>
+          </div>
+        </div>
       </div>
+      ${contentHtml}
     </div>
-    ${bodyHtml}
   `;
 }
 
@@ -1387,7 +1426,6 @@ function computeSpendingBars(expenses, period) {
   const now = new Date();
   const bars = [];
   if (period === 'WEEK') {
-    // 7 Days
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(now.getDate() - i);
@@ -1397,7 +1435,6 @@ function computeSpendingBars(expenses, period) {
       bars.push({ label: dayName, val: dayTotal });
     }
   } else if (period === 'MONTH') {
-    // Explicit Week 1, Week 2, Week 3, Week 4
     const weekLabels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
     const total = expenses.reduce((s, e) => s + e.amount, 0);
     for (let i = 0; i < 4; i++) {
@@ -1405,7 +1442,6 @@ function computeSpendingBars(expenses, period) {
       bars.push({ label: weekLabels[i], val: wTotal });
     }
   } else if (period === 'YEAR') {
-    // 6 Month chunks
     const months = ['Jan', 'Mar', 'May', 'Jul', 'Sep', 'Nov'];
     months.forEach((m, idx) => {
       const mTotal = expenses.length > 0 ? (expenses.reduce((s, e) => s + e.amount, 0) / 6) * (0.6 + (idx * 0.15)) : 0;
@@ -1489,7 +1525,7 @@ function renderDonutChart(catTotals, total) {
 // Groups Management & Detail Views
 // -------------------------------------------------------------------------
 async function renderGroups() {
-  const groupsRes = await apiFetch(currentUser ? `/groups?userId=${currentUser.id}` : '/groups');
+  const groupsRes = await apiFetch('/groups');
   const groups = groupsRes.ok ? await groupsRes.json() : [];
 
   return `
@@ -1498,7 +1534,7 @@ async function renderGroups() {
         <h2 style="font-size:1.3rem; font-weight:800;">Expense Groups</h2>
         <p style="font-size:0.82rem; color:var(--text-muted);">Corda multi-party shared expense pools</p>
       </div>
-      <button id="openGroupModalBtn">+ New</button>
+      <button id="openGroupModalBtn">+ New Group</button>
     </div>
 
     <!-- Create Group Modal Wrap -->
@@ -1539,7 +1575,7 @@ async function renderGroups() {
             <span class="badge badge-primary">Open</span>
           </div>
         </div>`).join('')}
-      ${groups.length === 0 ? '<div class="card" style="grid-column:1/-1; text-align:center; padding:30px;"><p style="color:var(--text-muted); font-size:0.85rem;">No groups yet. Click "+ New" to begin.</p></div>' : ''}
+      ${groups.length === 0 ? '<div class="card" style="grid-column:1/-1; text-align:center; padding:30px;"><p style="color:var(--text-muted); font-size:0.85rem;">No groups yet. Click "+ New Group" to begin.</p></div>' : ''}
     </div>
   `;
 }
@@ -1555,6 +1591,15 @@ async function renderGroupDetail(groupId) {
   const settlements = detail.settlements || [];
   const debts = detail.simplifiedDebts || [];
   const tab = window.__groupTab || 'Expenses';
+
+  // Cache user details
+  members.forEach(m => {
+    if (m.user) registerKnownUser(m.user);
+  });
+  settlements.forEach(s => {
+    if (s.paidByUser) registerKnownUser(s.paidByUser);
+    if (s.paidToUser) registerKnownUser(s.paidToUser);
+  });
 
   return `
     <div style="margin-bottom:16px;">
@@ -1612,7 +1657,10 @@ async function renderGroupDetail(groupId) {
             <div>
               <label class="field-label">Paid By</label>
               <select name="paidBy">
-                ${members.map(m => `<option value="${m.userId}" ${m.userId === currentUser.id ? 'selected' : ''}>${userName(m.userId)}</option>`).join('')}
+                ${members.map(m => {
+                  const isMe = currentUser && m.userId === currentUser.id;
+                  return `<option value="${m.userId}" ${isMe ? 'selected' : ''}>${userName(m.userId)}${isMe ? ' (You)' : ''}</option>`;
+                }).join('')}
               </select>
             </div>
             <div>
@@ -1626,14 +1674,17 @@ async function renderGroupDetail(groupId) {
           <div style="margin-bottom:12px;">
             <label class="field-label">Participants</label>
             <div style="display:flex; flex-direction:column; gap:6px; max-height:140px; overflow-y:auto;" id="participantsWrap">
-              ${members.map(m => `
+              ${members.map(m => {
+                const isMe = currentUser && m.userId === currentUser.id;
+                return `
                 <div style="display:flex; align-items:center; justify-content:space-between; background:var(--bg-raised); border:1px solid var(--border); padding:6px 10px; border-radius:4px; font-size:0.84rem;">
                   <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
                     <input type="checkbox" name="participant" value="${m.userId}" checked class="participant-check" />
-                    <b>${userName(m.userId)}</b>
+                    <b>${userName(m.userId)}${isMe ? ' (You)' : ''}</b>
                   </label>
                   <input type="number" step="0.01" class="split-custom-input" name="customAmount_${m.userId}" placeholder="₹0.00" style="display:none; width:90px; padding:3px 6px;" />
-                </div>`).join('')}
+                </div>`;
+              }).join('')}
             </div>
           </div>
           <div id="expenseError" class="error-text"></div>
@@ -1679,9 +1730,12 @@ async function renderGroupDetail(groupId) {
             <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:4px;" id="settleAmountHelp">Settles full outstanding balance.</span>
           </div>
 
+          <!-- Dynamic UPI App Section -->
+          <div id="settleUpiSection" style="margin-bottom:16px;"></div>
+
           <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
             <button type="button" class="secondary" id="cancelSettleModalBtn">Cancel</button>
-            <button type="submit" class="btn-success" id="submitSettleBtn">Initiate Settlement</button>
+            <button type="submit" class="btn-success" id="submitSettleBtn">Initiate Settlement on Ledger</button>
           </div>
         </form>
       </div>
@@ -1722,11 +1776,14 @@ function renderGroupTabContent(tab, groupId, members, expenses, settlements, deb
         <div class="activity-list">
           ${debts.map(b => {
             const isDebtor = currentUser && b.from === currentUser.id;
+            const isCreditor = currentUser && b.to === currentUser.id;
+            const fromName = userName(b.from) + (isDebtor ? ' (You)' : '');
+            const toName = userName(b.to) + (isCreditor ? ' (You)' : '');
             const pendingAmt = Number(b.pendingAmount || 0);
             return `
               <div class="activity-item">
                 <div>
-                  <span><b>${userName(b.from)}</b> owes <b>${userName(b.to)}</b>:</span>
+                  <span><b>${fromName}</b> owes <b>${toName}</b>:</span>
                   <span style="font-size:0.95rem; font-weight:700; color:var(--color-danger); margin-left:8px;">₹${Number(b.amount).toFixed(2)}</span>
                   ${b.pendingVerification ? `<div style="margin-top:4px;"><span class="badge badge-warning" style="font-size:0.75rem; color:var(--color-warning); font-weight:700;">Initiated ${pendingAmt > 0 ? '₹' + pendingAmt.toFixed(2) : ''} (Pending Receiver Verification)</span></div>` : ''}
                 </div>
@@ -1749,14 +1806,18 @@ function renderGroupTabContent(tab, groupId, members, expenses, settlements, deb
         <table class="data-table">
           <thead><tr><th>Payer</th><th>Payee</th><th>Amount</th><th>Status</th><th>Corda Tx ID</th></tr></thead>
           <tbody>
-            ${settlements.map(s => `
-              <tr>
-                <td><b>${userName(s.paidBy)}</b></td>
-                <td><b>${userName(s.paidTo)}</b></td>
-                <td><strong style="color:var(--color-success);">₹${Number(s.amount).toFixed(2)}</strong></td>
-                <td><span class="badge badge-success">COMPLETED</span></td>
-                <td><span class="node-tag mono" title="${s.cordaTxId}">${(s.cordaTxId || '0x...').slice(0, 14)}...</span></td>
-              </tr>`).join('')}
+            ${settlements.map(s => {
+              const payerName = s.paidByUser ? s.paidByUser.name : userName(s.paidBy);
+              const payeeName = s.paidToUser ? s.paidToUser.name : userName(s.paidTo);
+              return `
+                <tr>
+                  <td><b>${payerName}</b></td>
+                  <td><b>${payeeName}</b></td>
+                  <td><strong style="color:var(--color-success);">₹${Number(s.amount).toFixed(2)}</strong></td>
+                  <td><span class="badge badge-success">COMPLETED</span></td>
+                  <td><span class="node-tag mono" title="${s.cordaTxId}">${(s.cordaTxId || '0x...').slice(0, 14)}...</span></td>
+                </tr>`;
+            }).join('')}
             ${settlements.length === 0 ? '<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--text-muted);">No settlements completed yet.</td></tr>' : ''}
           </tbody>
         </table>
@@ -1768,25 +1829,26 @@ function renderGroupTabContent(tab, groupId, members, expenses, settlements, deb
         <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:12px;">Group Participants</h3>
         <div class="activity-list" style="margin-bottom:16px;">
           ${members.map(m => {
+            const u = m.user || userCache.get(m.userId) || { id: m.userId, name: `User #${m.userId}` };
+            const isMe = currentUser && m.userId === currentUser.id;
             return `
               <div class="activity-item">
                 <div>
-                  <b>${userName(m.userId)}</b>
+                  <b>${u.name}</b>
+                  ${u.username ? `<span style="font-size:0.75rem; color:var(--text-muted); margin-left:4px;">@${u.username}</span>` : ''}
+                  ${u.upiId ? `<span class="badge badge-info" style="margin-left:6px; font-size:0.7rem;">UPI: ${u.upiId}</span>` : ''}
                   <span class="badge badge-primary" style="margin-left:6px;">${m.role}</span>
                 </div>
-                ${m.userId === currentUser.id ? '<span class="badge badge-success">Active</span>' : ''}
+                ${isMe ? '<span class="badge badge-success">You</span>' : ''}
               </div>`;
           }).join('')}
         </div>
 
         <form id="addMemberForm" data-group-id="${groupId}" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--border); padding-top:14px;">
-          <select name="userId" style="max-width:220px;" required>
-            <option value="">Select user...</option>
-            ${allUsers.filter(u => !members.some(m => m.userId === u.id)).map(u => `
-              <option value="${u.id}">${u.name}</option>`).join('')}
-          </select>
-          <button type="submit" class="small">+ Add Member</button>
+          <input name="identifier" id="addMemberIdentifier" placeholder="Enter username or email address" style="flex:1; min-width:240px;" required />
+          <button type="submit" id="addMemberBtn" class="small">+ Add Member</button>
         </form>
+        <div id="addMemberMsg" class="error-text" style="width:100%; margin-top:6px;"></div>
       </div>
     `;
   }
@@ -1797,11 +1859,16 @@ function renderGroupTabContent(tab, groupId, members, expenses, settlements, deb
 // -------------------------------------------------------------------------
 async function renderInbox() {
   if (!currentUser) {
-    return `<div class="card" style="text-align:center; padding:30px;"><p style="color:var(--text-muted);">Please select an account identity to view your inbox.</p></div>`;
+    return `<div class="card" style="text-align:center; padding:30px;"><p style="color:var(--text-muted);">Please sign in to view your inbox.</p></div>`;
   }
 
-  const res = await apiFetch(`/settlements/pending?userId=${currentUser.id}`);
+  const res = await apiFetch(`/settlements/pending`);
   const items = res.ok ? await res.json() : [];
+
+  items.forEach(s => {
+    if (s.paidByUser) registerKnownUser(s.paidByUser);
+    if (s.paidToUser) registerKnownUser(s.paidToUser);
+  });
 
   return `
     <div style="margin-bottom:16px;">
@@ -1820,6 +1887,8 @@ async function renderInbox() {
         <div class="activity-list">
           ${items.map(s => {
             const isRejection = s.status === 'REJECTED';
+            const payerName = s.paidByUser ? s.paidByUser.name : userName(s.paidBy);
+            const payeeName = s.paidToUser ? s.paidToUser.name : userName(s.paidTo);
             if (isRejection) {
               return `
                 <div class="activity-item" style="flex-direction:column; align-items:flex-start; gap:10px; padding:14px; border-left:3px solid var(--color-danger);">
@@ -1827,7 +1896,7 @@ async function renderInbox() {
                     <div>
                       <span style="font-weight:700; color:var(--color-danger);">❌ Settlement Payment Rejected</span>
                       <div style="font-size:0.88rem; color:var(--text-heading); margin-top:4px;">
-                        Your settlement payment of <strong style="color:var(--color-danger);">₹${Number(s.amount).toFixed(2)}</strong> to <b>${userName(s.paidTo)}</b> was <strong>REJECTED</strong> by <b>${userName(s.paidTo)}</b>.
+                        Your settlement payment of <strong style="color:var(--color-danger);">₹${Number(s.amount).toFixed(2)}</strong> to <b>${payeeName}</b> was <strong>REJECTED</strong>.
                       </div>
                       ${s.cordaTxId ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Corda Rejection Tx ID: <code class="mono" title="${s.cordaTxId}">${s.cordaTxId.slice(0, 14)}...</code></div>` : ''}
                       <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Notarized on ${s.settledAt ? new Date(s.settledAt).toLocaleString() : 'Corda Ledger'}</div>
@@ -1843,7 +1912,7 @@ async function renderInbox() {
                 <div class="activity-item" style="flex-direction:column; align-items:flex-start; gap:10px; padding:14px;">
                   <div style="display:flex; justify-content:space-between; width:100%; align-items:center; flex-wrap:wrap; gap:6px;">
                     <div>
-                      <span style="font-weight:700; color:var(--text-heading);"><b>${userName(s.paidBy)}</b> initiated settlement payment of <strong style="color:var(--color-success);">₹${Number(s.amount).toFixed(2)}</strong></span>
+                      <span style="font-weight:700; color:var(--text-heading);"><b>${payerName}</b> initiated settlement payment of <strong style="color:var(--color-success);">₹${Number(s.amount).toFixed(2)}</strong></span>
                       <div style="font-size:0.78rem; color:var(--text-muted); margin-top:2px;">Initiated on ${new Date(s.createdAt).toLocaleString()}</div>
                     </div>
                     <span class="badge badge-warning" style="font-size:0.75rem; color:var(--color-warning);">Initiated (Pending Receiver Verification)</span>
@@ -1867,7 +1936,7 @@ async function renderInbox() {
 async function renderBlockchain() {
   let txs = [];
   try {
-    const res = await apiFetch(`/blockchain?nodeName=${currentUser ? currentUser.name : 'Garvit'}&userId=${currentUser ? currentUser.id : ''}`);
+    const res = await apiFetch(`/blockchain`);
     if (res.ok) txs = await res.json();
   } catch (e) {
     console.warn('Could not fetch blockchain records:', e);
@@ -1898,7 +1967,7 @@ async function renderBlockchain() {
         </thead>
         <tbody>
           ${displayedTxs.map(tx => {
-            const isRejected = (tx.vaultStatus || '').contains ? tx.vaultStatus.includes('REJECT') : String(tx.vaultStatus || '').indexOf('REJECT') !== -1;
+            const isRejected = String(tx.vaultStatus || '').indexOf('REJECT') !== -1;
             const statusBadgeClass = isRejected ? 'badge-danger' : 'badge-success';
             const stateBadgeClass = isRejected ? 'badge-danger' : (tx.stateType === 'ExpenseState' ? 'badge-expense' : 'badge-success');
             return `
@@ -1939,7 +2008,6 @@ async function renderBlockchain() {
     <div class="card" style="margin-top:20px;">
       <h3 style="font-size:1.05rem; font-weight:800; margin-bottom:12px;">Frequently Asked Questions</h3>
       
-      <!-- 1. What is happening? (First Accordion Item) -->
       <div class="faq-item">
         <div class="faq-question"><span>What is happening?</span><span class="faq-arrow">▼</span></div>
         <div class="faq-answer">
@@ -1989,31 +2057,26 @@ async function renderBlockchain() {
         </div>
       </div>
 
-      <!-- 2. What is a State? -->
       <div class="faq-item">
         <div class="faq-question"><span>What is a State?</span><span class="faq-arrow">▼</span></div>
         <div class="faq-answer">A <b>State</b> is an immutable digital representation of a financial agreement stored on the Corda ledger representing facts at a specific point in time.</div>
       </div>
 
-      <!-- 3. What is a Contract? -->
       <div class="faq-item">
         <div class="faq-question"><span>What is a Contract?</span><span class="faq-arrow">▼</span></div>
         <div class="faq-answer">A <b>Contract</b> defines deterministic validation constraints enforcing that transaction splits sum exactly to the expense amount.</div>
       </div>
 
-      <!-- 4. What is a Flow? -->
       <div class="faq-item">
         <div class="faq-question"><span>What is a Flow?</span><span class="faq-arrow">▼</span></div>
         <div class="faq-answer">A <b>Flow</b> is an automated peer-to-peer workflow coordinating multi-party consensus, signing, notarization, and vault recording.</div>
       </div>
 
-      <!-- 5. What does the Notary do? -->
       <div class="faq-item">
         <div class="faq-question"><span>What does the Notary do?</span><span class="faq-arrow">▼</span></div>
         <div class="faq-answer">The <b>Notary</b> provides uniqueness consensus, preventing double-spending of consumed states and timestamping the transaction with finality.</div>
       </div>
 
-      <!-- 6. What is the Vault? -->
       <div class="faq-item">
         <div class="faq-question"><span>What is the Vault?</span><span class="faq-arrow">▼</span></div>
         <div class="faq-answer">The <b>Vault</b> is each node's database of unconsumed and consumed ledger states that it is legally entitled to see, preserving privacy.</div>
@@ -2023,9 +2086,13 @@ async function renderBlockchain() {
 }
 
 // -------------------------------------------------------------------------
-// Profile / Node Identity Page
+// Profile & UPI Settings Page
 // -------------------------------------------------------------------------
 async function renderProfile() {
+  if (!currentUser) {
+    return `<div class="card" style="text-align:center; padding:30px;"><p style="color:var(--text-muted);">Please sign in to view your profile and settings.</p></div>`;
+  }
+
   let status = {};
   try {
     const res = await apiFetch('/blockchain/status');
@@ -2034,26 +2101,57 @@ async function renderProfile() {
 
   return `
     <div style="margin-bottom:16px;">
-      <h2 style="font-size:1.3rem; font-weight:800;">Node & Participant Identity</h2>
-      <p style="font-size:0.82rem; color:var(--text-muted);">Legal X.500 identity and Corda RPC connection details</p>
+      <h2 style="font-size:1.3rem; font-weight:800;">Account Profile & Node Identity</h2>
+      <p style="font-size:0.82rem; color:var(--text-muted);">Participant profile, UPI payment preferences, and Corda node RPC connection details</p>
     </div>
 
     <div class="card-grid">
       <div class="card">
-        <h3 style="font-size:0.95rem; font-weight:800; margin-bottom:10px;">User Profile</h3>
+        <h3 style="font-size:0.95rem; font-weight:800; margin-bottom:12px;">User Account</h3>
         <p style="margin-bottom:6px; font-size:0.85rem;"><strong>Name:</strong> ${currentUser.name}</p>
+        <p style="margin-bottom:6px; font-size:0.85rem;"><strong>Username:</strong> ${currentUser.username ? '@' + currentUser.username : '<span style="color:var(--text-muted);">Not set</span>'}</p>
         <p style="margin-bottom:6px; font-size:0.85rem;"><strong>Email:</strong> ${currentUser.email}</p>
-        <p style="margin-bottom:6px; font-size:0.85rem;"><strong>Role:</strong> Corda Network Participant</p>
+        <p style="margin-bottom:6px; font-size:0.85rem;"><strong>Phone:</strong> ${currentUser.phone || '<span style="color:var(--text-muted);">Not set</span>'}</p>
         <p style="margin-bottom:6px; font-size:0.85rem;"><strong>Operating Mode:</strong> ${isDemoMode ? '<span class="test-indicator">TEST</span>' : '<span class="main-indicator">MAIN</span>'}</p>
       </div>
 
       <div class="card">
-        <h3 style="font-size:0.95rem; font-weight:800; margin-bottom:10px;">Corda Legal Identity</h3>
+        <h3 style="font-size:0.95rem; font-weight:800; margin-bottom:12px;">Corda Legal Identity</h3>
         <pre class="mono" style="background:var(--bg-raised); border:1px solid var(--border); padding:10px; border-radius:4px; font-size:0.75rem; overflow-x:auto;">${currentUser.cordaX500Name || 'O=Party,L=New Delhi,C=IN'}</pre>
         <div style="margin-top:8px; font-size:0.75rem; color:var(--text-muted);">
           <b>Notary Service:</b> O=Notary,L=London,C=GB (RPC: 10003)
         </div>
       </div>
+    </div>
+
+    <!-- UPI Settings Card -->
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+        <div>
+          <h3 style="font-size:1rem; font-weight:800;">UPI Payment Preferences</h3>
+          <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">
+            Save your Virtual Payment Address (VPA) so other group members can pay you directly via UPI apps (GPay, PhonePe, Paytm, BHIM, etc.).
+          </p>
+        </div>
+        <span class="badge ${currentUser.upiId ? 'badge-success' : 'badge-warning'}">
+          ${currentUser.upiId ? 'UPI Configured' : 'UPI Not Set'}
+        </span>
+      </div>
+
+      <form id="upiSettingsForm" style="margin-top:12px;">
+        <div style="margin-bottom:12px;">
+          <label class="field-label">Your UPI ID / VPA</label>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <input type="text" name="upiId" id="userUpiIdInput" value="${currentUser.upiId || ''}" placeholder="e.g. name@okhdfcbank or 9876543210@paytm" style="flex:1; min-width:240px; max-width:420px;" />
+            <button type="submit" id="saveUpiBtn" class="small">Save UPI ID</button>
+            ${currentUser.upiId ? `<button type="button" id="clearUpiBtn" class="secondary small">Clear</button>` : ''}
+          </div>
+          <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:6px;">
+            🔒 Safe & Private: Only your VPA handle is stored. Never enter your UPI PIN, banking passwords, or OTP.
+          </span>
+        </div>
+        <div id="upiSettingsMsg" class="error-text"></div>
+      </form>
     </div>
 
     <div class="card" style="margin-top:16px;">
@@ -2081,11 +2179,53 @@ async function renderProfile() {
 }
 
 // -------------------------------------------------------------------------
-// Helper Utilities
+// Dynamic UPI Section Helper
 // -------------------------------------------------------------------------
-function userName(id) {
-  const u = allUsers.find(u => u.id === Number(id));
-  return u ? u.name : `User #${id}`;
+function updateSettleUpiUi(amount) {
+  const upiSection = document.getElementById('settleUpiSection');
+  if (!upiSection) return;
+  const to = Number(document.getElementById('settlePaidTo').value);
+  const recipient = userCache.get(to);
+  const recipientName = recipient ? recipient.name : `User #${to}`;
+  const recipientUpi = recipient ? recipient.upiId : null;
+
+  if (recipientUpi) {
+    const amtNum = Number(amount) || 0;
+    const upiUrl = `upi://pay?pa=${encodeURIComponent(recipientUpi)}&pn=${encodeURIComponent(recipientName)}&am=${encodeURIComponent(amtNum.toFixed(2))}&cu=INR&tn=${encodeURIComponent('ExpenseChain Settlement')}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(upiUrl)}`;
+
+    upiSection.innerHTML = `
+      <div style="background:var(--bg-raised); border:1px solid var(--border); border-radius:6px; padding:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div style="font-weight:700; font-size:0.85rem; color:var(--text-heading);">📱 Pay via UPI App</div>
+          <span class="badge badge-success">UPI Ready</span>
+        </div>
+
+        <a href="${upiUrl}" target="_blank" rel="noopener noreferrer" class="btn-primary" style="display:flex; align-items:center; justify-content:center; gap:8px; text-decoration:none; padding:10px 14px; border-radius:6px; font-weight:700; background:var(--color-success); color:#fff; margin-bottom:12px;">
+          <span>Launch UPI App (₹${amtNum.toFixed(2)})</span>
+        </a>
+
+        <div style="display:flex; align-items:center; gap:12px; margin-top:8px; padding-top:10px; border-top:1px solid var(--border);">
+          <img src="${qrUrl}" alt="Scan UPI QR" style="width:90px; height:90px; border-radius:6px; border:1px solid var(--border); background:#fff; padding:3px;" />
+          <div style="font-size:0.78rem; flex:1;">
+            <div style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; font-weight:700;">Recipient UPI ID</div>
+            <div class="mono" style="font-weight:700; margin:3px 0 6px 0; word-break:break-all;">${recipientUpi}</div>
+            <button type="button" class="secondary small" style="padding:3px 8px; font-size:0.72rem;" onclick="copyText('${recipientUpi}', 'UPI ID copied to clipboard ✓')">Copy UPI ID</button>
+          </div>
+        </div>
+
+        <p style="font-size:0.72rem; color:var(--text-muted); margin-top:10px; line-height:1.4;">
+          ℹ️ <b>Note:</b> Launching UPI opens your payment app. After completing transfer, click <b>Initiate Settlement on Ledger</b> below to notify the recipient for Corda notarization.
+        </p>
+      </div>
+    `;
+  } else {
+    upiSection.innerHTML = `
+      <div class="badge badge-warning" style="display:block; padding:10px 12px; text-align:left; border-radius:6px; line-height:1.4; font-size:0.78rem;">
+        ⚠️ <b>${recipientName}</b> has not configured a UPI ID yet. They can add one in <b>Profile & Settings</b>. You can still initiate manual settlement recording below.
+      </div>
+    `;
+  }
 }
 
 // -------------------------------------------------------------------------
@@ -2111,17 +2251,6 @@ function attachEventHandlers() {
     });
   }
 
-  const userSwitcher = document.getElementById('userSwitcher');
-  if (userSwitcher) {
-    userSwitcher.addEventListener('change', () => {
-      const newId = Number(userSwitcher.value);
-      currentUser = allUsers.find(u => u.id === newId) || currentUser;
-      localStorage.setItem(ACTIVE_USER_ID_KEY, currentUser.id);
-      showToast(`Active perspective: ${currentUser.name}`);
-      render();
-    });
-  }
-
   // Auth Forms
   const loginForm = document.getElementById('loginForm');
   if (loginForm) {
@@ -2131,12 +2260,12 @@ function attachEventHandlers() {
       btn.disabled = true;
       btn.textContent = 'Signing in...';
       const fd = new FormData(loginForm);
-      const email = fd.get('email').trim();
+      const identifier = (fd.get('identifier') || '').trim();
       const password = fd.get('password');
       try {
         const res = await apiFetch('/auth/login', {
           method: 'POST',
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify({ identifier, password })
         });
         const data = await res.json();
         if (!res.ok) {
@@ -2146,11 +2275,11 @@ function attachEventHandlers() {
           return;
         }
         currentUser = data.user;
+        registerKnownUser(currentUser);
         isDemoMode = false;
         localStorage.setItem(DEMO_MODE_KEY, 'false');
         localStorage.setItem(ACTIVE_USER_ID_KEY, currentUser.id);
         localStorage.setItem(AUTH_TOKEN_KEY, data.token);
-        await initMainSession();
         showToast(`Welcome back, ${currentUser.name}!`);
         nav('/dashboard');
       } catch (err) {
@@ -2169,14 +2298,16 @@ function attachEventHandlers() {
       btn.disabled = true;
       btn.textContent = 'Creating account...';
       const fd = new FormData(registerForm);
-      const name = fd.get('name').trim();
-      const email = fd.get('email').trim();
+      const name = (fd.get('name') || '').trim();
+      const username = (fd.get('username') || '').trim();
+      const email = (fd.get('email') || '').trim();
       const password = fd.get('password');
-      const phone = fd.get('phone');
+      const phone = (fd.get('phone') || '').trim();
+      const upiId = (fd.get('upiId') || '').trim();
       try {
         const res = await apiFetch('/auth/register', {
           method: 'POST',
-          body: JSON.stringify({ name, email, password, phone })
+          body: JSON.stringify({ name, username, email, password, phone, upiId })
         });
         const data = await res.json();
         if (!res.ok) {
@@ -2186,11 +2317,11 @@ function attachEventHandlers() {
           return;
         }
         currentUser = data.user;
+        registerKnownUser(currentUser);
         isDemoMode = false;
         localStorage.setItem(DEMO_MODE_KEY, 'false');
         localStorage.setItem(ACTIVE_USER_ID_KEY, currentUser.id);
         localStorage.setItem(AUTH_TOKEN_KEY, data.token);
-        await initMainSession();
         showToast(`Account registered for ${currentUser.name}!`);
         nav('/dashboard');
       } catch (err) {
@@ -2220,23 +2351,25 @@ function attachEventHandlers() {
       btn.disabled = true;
       btn.textContent = 'Creating...';
       const fd = new FormData(createGroupForm);
-      const name = fd.get('name').trim();
-      const description = fd.get('description').trim();
+      const name = (fd.get('name') || '').trim();
+      const description = (fd.get('description') || '').trim();
       try {
         const res = await apiFetch('/groups', {
           method: 'POST',
-          body: JSON.stringify({ name, description, userId: currentUser.id })
+          body: JSON.stringify({ name, description })
         });
-        if (res.ok) {
-          const group = await res.json();
-          showToast(`Group "${group.name}" created!`);
-          nav(`/groups/${group.id}`);
-        } else {
-          document.getElementById('groupError').textContent = 'Failed to create group';
+        const data = await res.json();
+        if (!res.ok) {
+          document.getElementById('groupError').textContent = data.error || 'Group creation failed';
+          btn.disabled = false;
+          btn.textContent = 'Create Group';
+          return;
         }
-      } catch (e) {
-        document.getElementById('groupError').textContent = 'Network error';
-      } finally {
+        showToast('Group created ✓');
+        createGroupModal.style.display = 'none';
+        render();
+      } catch (err) {
+        document.getElementById('groupError').textContent = 'Server error';
         btn.disabled = false;
         btn.textContent = 'Create Group';
       }
@@ -2244,9 +2377,9 @@ function attachEventHandlers() {
   }
 
   // Group Details Tabs
-  document.querySelectorAll('[data-group-tab]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      window.__groupTab = btn.getAttribute('data-group-tab');
+  document.querySelectorAll('[data-group-tab]').forEach(tabBtn => {
+    tabBtn.addEventListener('click', () => {
+      window.__groupTab = tabBtn.getAttribute('data-group-tab');
       render();
     });
   });
@@ -2419,6 +2552,8 @@ function attachEventHandlers() {
       }
       if (amountHelp) amountHelp.textContent = 'Settles full outstanding balance.';
 
+      updateSettleUpiUi(maxAmt);
+
       if (modal) modal.style.display = 'flex';
     });
   });
@@ -2443,6 +2578,7 @@ function attachEventHandlers() {
         settleAmountInput.value = maxAmt.toFixed(2);
         settleAmountInput.readOnly = true;
         if (settleAmountHelp) settleAmountHelp.textContent = 'Settles full outstanding balance.';
+        updateSettleUpiUi(maxAmt);
       }
     });
 
@@ -2451,7 +2587,12 @@ function attachEventHandlers() {
         settleAmountInput.readOnly = false;
         settleAmountInput.focus();
         if (settleAmountHelp) settleAmountHelp.textContent = 'Enter partial amount (cannot exceed full debt).';
+        updateSettleUpiUi(Number(settleAmountInput.value) || 0);
       }
+    });
+
+    settleAmountInput.addEventListener('input', () => {
+      updateSettleUpiUi(Number(settleAmountInput.value) || 0);
     });
   }
 
@@ -2491,7 +2632,7 @@ function attachEventHandlers() {
         if (!res.ok) {
           if (err) err.textContent = data.error || 'Failed to initiate settlement';
           submitBtn.disabled = false;
-          submitBtn.textContent = 'Initiate Settlement';
+          submitBtn.textContent = 'Initiate Settlement on Ledger';
           return;
         }
 
@@ -2502,7 +2643,7 @@ function attachEventHandlers() {
       } catch (ex) {
         if (err) err.textContent = ex.message || 'Error initiating settlement';
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Initiate Settlement';
+        submitBtn.textContent = 'Initiate Settlement on Ledger';
       }
     });
   }
@@ -2571,28 +2712,115 @@ function attachEventHandlers() {
     });
   });
 
-  // Add Member
+  // Add Member by username or email
   const addMemberForm = document.getElementById('addMemberForm');
   if (addMemberForm) {
     addMemberForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const groupId = Number(addMemberForm.getAttribute('data-group-id'));
-      const fd = new FormData(addMemberForm);
-      const userId = Number(fd.get('userId'));
-      if (!userId) return;
+      const btn = document.getElementById('addMemberBtn');
+      const msgEl = document.getElementById('addMemberMsg');
+      const input = document.getElementById('addMemberIdentifier');
+      const identifier = (input ? input.value : '').trim();
+
+      if (!identifier) {
+        if (msgEl) msgEl.textContent = 'Enter a username or email address';
+        return;
+      }
+
+      if (msgEl) msgEl.textContent = '';
+      btn.disabled = true;
+      btn.textContent = 'Adding member...';
+
       try {
         const res = await apiFetch(`/groups/${groupId}/members`, {
           method: 'POST',
-          body: JSON.stringify({ userId, role: 'MEMBER' })
+          body: JSON.stringify({ identifier })
         });
-        if (res.ok) {
-          showToast('Member added to group ✓');
-          render();
+        const data = await res.json();
+        if (!res.ok) {
+          if (msgEl) msgEl.textContent = data.error || 'Failed to add member';
+          btn.disabled = false;
+          btn.textContent = '+ Add Member';
+          return;
         }
+
+        showToast('Member added to group ✓');
+        input.value = '';
+        btn.disabled = false;
+        btn.textContent = '+ Add Member';
+        render();
       } catch (err) {
-        showToast('Error adding member', true);
+        if (msgEl) msgEl.textContent = err.message || 'Error adding member';
+        btn.disabled = false;
+        btn.textContent = '+ Add Member';
       }
     });
+  }
+
+  // Profile UPI Settings Form
+  const upiSettingsForm = document.getElementById('upiSettingsForm');
+  if (upiSettingsForm) {
+    upiSettingsForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('saveUpiBtn');
+      const msgEl = document.getElementById('upiSettingsMsg');
+      const input = document.getElementById('userUpiIdInput');
+      const upiId = (input ? input.value : '').trim();
+
+      if (msgEl) msgEl.textContent = '';
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      try {
+        const res = await apiFetch('/auth/profile/upi', {
+          method: 'PUT',
+          body: JSON.stringify({ upiId })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          if (msgEl) msgEl.textContent = data.error || 'Failed to save UPI ID';
+          btn.disabled = false;
+          btn.textContent = 'Save UPI ID';
+          return;
+        }
+
+        currentUser.upiId = data.user ? data.user.upiId : upiId;
+        registerKnownUser(currentUser);
+        showToast('UPI ID saved successfully ✓');
+        render();
+      } catch (err) {
+        if (msgEl) msgEl.textContent = err.message || 'Error saving UPI ID';
+        btn.disabled = false;
+        btn.textContent = 'Save UPI ID';
+      }
+    });
+
+    const clearUpiBtn = document.getElementById('clearUpiBtn');
+    if (clearUpiBtn) {
+      clearUpiBtn.addEventListener('click', async () => {
+        clearUpiBtn.disabled = true;
+        try {
+          const res = await apiFetch('/auth/profile/upi', {
+            method: 'PUT',
+            body: JSON.stringify({ upiId: '' })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            currentUser.upiId = null;
+            registerKnownUser(currentUser);
+            showToast('UPI ID removed ✓');
+            render();
+          } else {
+            showToast(data.error || 'Failed to clear UPI ID', true);
+            clearUpiBtn.disabled = false;
+          }
+        } catch (err) {
+          showToast('Error removing UPI ID', true);
+          clearUpiBtn.disabled = false;
+        }
+      });
+    }
   }
 
   // Show More Button in Ledger Table

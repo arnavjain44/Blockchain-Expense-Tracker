@@ -43,19 +43,34 @@ public class ExpenseController {
     }
 
     @PostMapping
-    public ResponseEntity<?> addExpense(@RequestBody Map<String, Object> body,
+    public ResponseEntity<?> addExpense(@RequestHeader(value = "Authorization", required = false) String authHeader,
+                                        @RequestBody Map<String, Object> body,
                                         @RequestHeader(value = "X-Demo-Mode", required = false) Boolean headerDemo,
                                         @RequestParam(value = "demo", required = false) Boolean queryDemo) {
         boolean isDemo = resolveDemo(headerDemo, queryDemo);
+        User currentUser = dataStore.getAuthenticatedUser(authHeader, isDemo);
+        if (currentUser == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED)
+                    .body(Collections.singletonMap("error", "Unauthorized"));
+        }
         try {
             Long groupId = ((Number) body.get("groupId")).longValue();
+            if (!dataStore.isUserMemberOfGroup(isDemo, groupId, currentUser.getId())) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                        .body(Collections.singletonMap("error", "You are not an authorized member of this group"));
+            }
+
             String title = (String) body.get("title");
             double amount = ((Number) body.get("amount")).doubleValue();
             String category = (String) body.getOrDefault("category", "FOOD");
             String description = (String) body.getOrDefault("description", "");
             String expenseDate = (String) body.get("expenseDate");
-            Long paidBy = ((Number) body.get("paidBy")).longValue();
+            Long paidBy = body.containsKey("paidBy") ? ((Number) body.get("paidBy")).longValue() : currentUser.getId();
             String splitType = (String) body.getOrDefault("splitType", "EQUAL");
+
+            if (!dataStore.isUserMemberOfGroup(isDemo, groupId, paidBy)) {
+                return ResponseEntity.badRequest().body(Collections.singletonMap("error", "Payer must be a member of the group"));
+            }
 
             User payerUser = dataStore.getUserById(isDemo, paidBy);
             if (payerUser == null) {

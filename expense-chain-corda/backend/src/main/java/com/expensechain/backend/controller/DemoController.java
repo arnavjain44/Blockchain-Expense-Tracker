@@ -1,8 +1,10 @@
 package com.expensechain.backend.controller;
 
+import com.expensechain.backend.dto.UserDto;
 import com.expensechain.backend.model.Group;
 import com.expensechain.backend.model.User;
 import com.expensechain.backend.service.DataStoreService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,7 +22,8 @@ public class DemoController {
     }
 
     /**
-     * Initializes or fetches active Demo Session and dataset
+     * Initializes or fetches active Demo Session and dataset.
+     * Does NOT expose a directory of users or allow switching between accounts.
      */
     @GetMapping({"/demo/session", "/demo/data", "/demo"})
     public ResponseEntity<?> getDemoSession() {
@@ -30,6 +33,8 @@ public class DemoController {
             users = dataStore.getAllUsers(true);
         }
         User activeUser = users.get(0);
+        String token = dataStore.createSession(true, activeUser.getId());
+
         List<Group> groups = dataStore.getGroupsForUser(true, activeUser.getId());
         List<com.expensechain.backend.model.Expense> expenses = new ArrayList<>();
         for (Group g : groups) {
@@ -37,8 +42,8 @@ public class DemoController {
         }
 
         Map<String, Object> resp = new HashMap<>();
-        resp.put("users", users);
-        resp.put("activeUser", activeUser);
+        resp.put("activeUser", UserDto.fromUser(activeUser));
+        resp.put("token", token);
         resp.put("groups", groups);
         resp.put("expenses", expenses);
         resp.put("mode", "DEMO");
@@ -46,32 +51,29 @@ public class DemoController {
     }
 
     /**
-     * Re-seeds the demo partition with a brand new randomized dataset
+     * Re-seeds the demo partition with a brand new randomized dataset (in-memory only).
      */
     @PostMapping("/demo/reset")
     public ResponseEntity<?> resetDemo() {
         dataStore.resetDemoStore();
         List<User> users = dataStore.getAllUsers(true);
         User activeUser = users.isEmpty() ? null : users.get(0);
+        String token = (activeUser != null) ? dataStore.createSession(true, activeUser.getId()) : null;
 
         Map<String, Object> resp = new HashMap<>();
         resp.put("message", "Demo environment re-seeded with fresh randomized dataset");
-        resp.put("users", users);
-        resp.put("activeUser", activeUser);
+        resp.put("activeUser", UserDto.fromUser(activeUser));
+        resp.put("token", token);
         resp.put("groups", activeUser != null ? dataStore.getGroupsForUser(true, activeUser.getId()) : Collections.emptyList());
         return ResponseEntity.ok(resp);
     }
 
     /**
-     * Full development environment reset (wipes main data and re-seeds demo data)
+     * Destructive dev reset is permanently disabled to protect user and application data.
      */
     @PostMapping("/dev/reset")
-    public ResponseEntity<?> resetDevEnvironment(@RequestParam(required = false, defaultValue = "true") boolean seedDemo) {
-        dataStore.resetDevEnvironment(seedDemo);
-        Map<String, Object> resp = new HashMap<>();
-        resp.put("message", "Development environment reset successfully");
-        resp.put("mainStoreClean", true);
-        resp.put("demoSeeded", seedDemo);
-        return ResponseEntity.ok(resp);
+    public ResponseEntity<?> resetDevEnvironment() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Collections.singletonMap("error", "Development reset endpoint is permanently disabled for security and data protection."));
     }
 }

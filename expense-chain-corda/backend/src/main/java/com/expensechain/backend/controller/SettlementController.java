@@ -43,16 +43,29 @@ public class SettlementController {
     }
 
     @PostMapping
-    public ResponseEntity<?> recordSettlement(@RequestBody Map<String, Object> body,
+    public ResponseEntity<?> recordSettlement(@RequestHeader(value = "Authorization", required = false) String authHeader,
+                                              @RequestBody Map<String, Object> body,
                                               @RequestHeader(value = "X-Demo-Mode", required = false) Boolean headerDemo,
                                               @RequestParam(value = "demo", required = false) Boolean queryDemo) {
         boolean isDemo = resolveDemo(headerDemo, queryDemo);
+        User currentUser = dataStore.getAuthenticatedUser(authHeader, isDemo);
+        if (currentUser == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED)
+                    .body(Collections.singletonMap("error", "Unauthorized"));
+        }
         try {
             Long groupId = ((Number) body.get("groupId")).longValue();
-            Long paidBy = ((Number) body.get("paidBy")).longValue();
+            Long paidBy = currentUser.getId(); // Enforce authenticated user as payer
             Long paidTo = ((Number) body.get("paidTo")).longValue();
             double amount = ((Number) body.get("amount")).doubleValue();
 
+            if (!dataStore.isUserMemberOfGroup(isDemo, groupId, paidBy)) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                        .body(Collections.singletonMap("error", "You are not a member of this group"));
+            }
+            if (!dataStore.isUserMemberOfGroup(isDemo, groupId, paidTo)) {
+                return ResponseEntity.badRequest().body(Collections.singletonMap("error", "Recipient must be a member of the group"));
+            }
             if (paidBy.equals(paidTo)) {
                 return ResponseEntity.badRequest().body(Collections.singletonMap("error", "Payer and payee cannot be the same user"));
             }
@@ -87,26 +100,45 @@ public class SettlementController {
     }
 
     @GetMapping("/pending")
-    public ResponseEntity<?> getPendingSettlements(@RequestParam Long userId,
+    public ResponseEntity<?> getPendingSettlements(@RequestHeader(value = "Authorization", required = false) String authHeader,
+                                                   @RequestParam(required = false) Long userId,
                                                    @RequestHeader(value = "X-Demo-Mode", required = false) Boolean headerDemo,
                                                    @RequestParam(value = "demo", required = false) Boolean queryDemo) {
         boolean isDemo = resolveDemo(headerDemo, queryDemo);
-        List<Settlement> pending = dataStore.getPendingSettlementsForUser(isDemo, userId);
+        User currentUser = dataStore.getAuthenticatedUser(authHeader, isDemo);
+        if (currentUser == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED)
+                    .body(Collections.singletonMap("error", "Unauthorized"));
+        }
+        // Always return pending settlements for the authenticated session user
+        List<Settlement> pending = dataStore.getPendingSettlementsForUser(isDemo, currentUser.getId());
         return ResponseEntity.ok(pending);
     }
 
     @PostMapping("/{id}/verify")
     public ResponseEntity<?> verifySettlement(@PathVariable Long id,
+                                              @RequestHeader(value = "Authorization", required = false) String authHeader,
                                               @RequestBody Map<String, Object> body,
                                               @RequestHeader(value = "X-Demo-Mode", required = false) Boolean headerDemo,
                                               @RequestParam(value = "demo", required = false) Boolean queryDemo) {
         boolean isDemo = resolveDemo(headerDemo, queryDemo);
+        User currentUser = dataStore.getAuthenticatedUser(authHeader, isDemo);
+        if (currentUser == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED)
+                    .body(Collections.singletonMap("error", "Unauthorized"));
+        }
         try {
             boolean approved = Boolean.TRUE.equals(body.get("approved")) || "APPROVE".equalsIgnoreCase(String.valueOf(body.get("action")));
 
             Settlement settlement = dataStore.getSettlementById(isDemo, id);
             if (settlement == null) {
                 return ResponseEntity.notFound().build();
+            }
+
+            // Verify caller is the intended recipient
+            if (!settlement.getPaidTo().equals(currentUser.getId())) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                        .body(Collections.singletonMap("error", "Only the settlement recipient can verify or reject this payment"));
             }
 
             if (!"PENDING_VERIFICATION".equalsIgnoreCase(settlement.getStatus())) {
@@ -184,11 +216,22 @@ public class SettlementController {
 
     @PostMapping("/{id}/dismiss")
     public ResponseEntity<?> dismissSettlement(@PathVariable Long id,
-                                              @RequestHeader(value = "X-Demo-Mode", required = false) Boolean headerDemo,
-                                              @RequestParam(value = "demo", required = false) Boolean queryDemo) {
+                                               @RequestHeader(value = "Authorization", required = false) String authHeader,
+                                               @RequestHeader(value = "X-Demo-Mode", required = false) Boolean headerDemo,
+                                               @RequestParam(value = "demo", required = false) Boolean queryDemo) {
         boolean isDemo = resolveDemo(headerDemo, queryDemo);
+        User currentUser = dataStore.getAuthenticatedUser(authHeader, isDemo);
+        if (currentUser == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED)
+                    .body(Collections.singletonMap("error", "Unauthorized"));
+        }
+        Settlement existing = dataStore.getSettlementById(isDemo, id);
+        if (existing == null) return ResponseEntity.notFound().build();
+        if (!existing.getPaidBy().equals(currentUser.getId())) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Collections.singletonMap("error", "Only the payer can dismiss this rejected settlement"));
+        }
         Settlement s = dataStore.dismissSettlementRejection(isDemo, id);
-        if (s == null) return ResponseEntity.notFound().build();
         return ResponseEntity.ok(s);
     }
 }

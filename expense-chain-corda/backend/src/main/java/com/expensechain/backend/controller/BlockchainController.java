@@ -54,12 +54,14 @@ public class BlockchainController {
 
     @GetMapping({"", "/records"})
     public ResponseEntity<List<BlockchainRecord>> getBlockchainRecords(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
             @RequestParam(required = false, defaultValue = "Garvit") String nodeName,
             @RequestParam(required = false) Long userId,
             @RequestHeader(value = "X-Demo-Mode", required = false) Boolean headerDemo,
             @RequestParam(value = "demo", required = false) Boolean queryDemo) {
 
         boolean isDemo = resolveDemo(headerDemo, queryDemo);
+        User currentUser = dataStore.getAuthenticatedUser(authHeader, isDemo);
 
         List<BlockchainRecord> records = new ArrayList<>();
         Set<String> seenTx = new HashSet<>();
@@ -74,21 +76,23 @@ public class BlockchainController {
             }
         }
 
-        // Fetch groups for the specified user or all groups in this partition
+        // Fetch groups for the authenticated user or active partition
         List<Group> groups;
-        if (userId != null) {
-            groups = dataStore.getGroupsForUser(isDemo, userId);
-        } else {
-            List<User> users = dataStore.getAllUsers(isDemo);
+        if (currentUser != null) {
+            groups = dataStore.getGroupsForUser(isDemo, currentUser.getId());
+        } else if (isDemo) {
+            List<User> demoUsers = dataStore.getAllUsers(true);
             Set<Long> groupIds = new HashSet<>();
             groups = new ArrayList<>();
-            for (User u : users) {
-                for (Group g : dataStore.getGroupsForUser(isDemo, u.getId())) {
+            for (User u : demoUsers) {
+                for (Group g : dataStore.getGroupsForUser(true, u.getId())) {
                     if (groupIds.add(g.getId())) {
                         groups.add(g);
                     }
                 }
             }
+        } else {
+            groups = Collections.emptyList();
         }
 
         for (Group g : groups) {

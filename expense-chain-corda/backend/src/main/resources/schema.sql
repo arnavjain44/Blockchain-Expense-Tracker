@@ -5,10 +5,24 @@
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    username VARCHAR(255) UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     phone VARCHAR(50),
     corda_x500_name VARCHAR(255),
+    upi_id VARCHAR(255),
+    created_at VARCHAR(50) NOT NULL
+);
+
+-- Backward-compatible column additions for existing installations
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS upi_id VARCHAR(255);
+
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(255) NOT NULL UNIQUE,
+    expires_at VARCHAR(50) NOT NULL,
     created_at VARCHAR(50) NOT NULL
 );
 
@@ -63,6 +77,9 @@ CREATE TABLE IF NOT EXISTS settlements (
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(token_hash);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_group_members_group ON group_members(group_id);
 CREATE INDEX IF NOT EXISTS idx_expenses_group ON expenses(group_id);
