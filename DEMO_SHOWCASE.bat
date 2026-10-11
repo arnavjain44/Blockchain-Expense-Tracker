@@ -1,9 +1,9 @@
 @echo off
 setlocal
-title ExpenseChain DA2 - Interactive Demo & Presentation Showcase
+title ExpenseChain - Interactive Demo & Presentation Showcase
 
 echo =======================================================================
-echo          EXPENSECHAIN DA2 - LIVE DEMO & PRESENTATION LAUNCHER         
+echo          EXPENSECHAIN - LIVE DEMO & PRESENTATION LAUNCHER         
 echo =======================================================================
 echo.
 echo Checking development environment status...

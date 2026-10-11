@@ -1,5 +1,5 @@
 # =======================================================================
-# ExpenseChain DA2 - Multi-Cycle Reliability & Reproducibility Test Suite
+# ExpenseChain - Multi-Cycle Reliability & Reproducibility Test Suite
 # Tests: Cycle 1 -> Cycle 2 -> Cycle 3 -> Cycle 4
 # =======================================================================
 

@@ -1,5 +1,5 @@
 # =======================================================================
-# ExpenseChain DA2 - Reliable Development Environment Stop Script
+# ExpenseChain - Reliable Development Environment Stop Script
 # =======================================================================
 $ErrorActionPreference = "SilentlyContinue"
 

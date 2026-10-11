@@ -30,7 +30,11 @@ public class CordaRpcConfig {
         public void setUsername(String username) { this.username = username; }
 
         public String getPassword() { return password; }
-        public void setPassword(String password) { this.password = password; }
+        public void setPassword(String password) {
+            if (password != null && !password.trim().isEmpty()) {
+                this.password = password.trim();
+            }
+        }
 
         public String getX500Name() { return x500Name; }
         public void setX500Name(String x500Name) { this.x500Name = x500Name; }

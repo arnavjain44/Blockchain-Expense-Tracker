@@ -1,6 +1,6 @@
-# ExpenseChain DA2 — Live Demo & Presentation Script
+# ExpenseChain — Live Demo & Presentation Script
 
-This guide outlines a **5-Minute Live Presentation Walkthrough** for evaluating or demonstrating **ExpenseChain DA2** (Enterprise Decentralized Shared Expense Settlement powered by R3 Corda DLT and Spring Boot).
+This guide outlines a **5-Minute Live Presentation Walkthrough** for evaluating or demonstrating **ExpenseChain** (Enterprise Decentralized Shared Expense Settlement powered by R3 Corda DLT and Spring Boot).
 
 ---
 

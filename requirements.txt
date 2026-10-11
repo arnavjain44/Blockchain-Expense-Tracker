@@ -1,8 +1,8 @@
 # ==============================================================================
-# EXPENSECHAIN DA2 - SYSTEM & RUNTIME REQUIREMENTS
+# EXPENSECHAIN - SYSTEM & RUNTIME REQUIREMENTS
 # ==============================================================================
 # This file lists the software runtime, language, build tool, framework,
-# and system requirements for running ExpenseChain DA2 on a local development machine.
+# and system requirements for running ExpenseChain on a local development machine.
 # ==============================================================================
 
 # Operating System & Architecture

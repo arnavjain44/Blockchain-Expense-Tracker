@@ -1,5 +1,5 @@
 # =======================================================================
-# ExpenseChain DA2 - Unified Local Development Control Script
+# ExpenseChain - Unified Local Development Control Script
 # =======================================================================
 param (
     [switch]$NoBrowser,
@@ -34,7 +34,7 @@ if (Test-Path $JavaHome) {
 }
 
 Write-Host "=======================================================================" -ForegroundColor Cyan
-Write-Host "          EXPENSECHAIN DA2 - R3 CORDA DLT & SPRING BOOT                " -ForegroundColor Cyan
+Write-Host "          EXPENSECHAIN - R3 CORDA DLT & SPRING BOOT                    " -ForegroundColor Cyan
 Write-Host "=======================================================================" -ForegroundColor Cyan
 Write-Host " Using Java: $JavaExe" -ForegroundColor DarkGray
 Write-Host ""

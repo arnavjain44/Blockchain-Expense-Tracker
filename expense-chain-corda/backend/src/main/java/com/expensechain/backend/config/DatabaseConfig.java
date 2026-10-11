@@ -38,7 +38,24 @@ public class DatabaseConfig {
 
         String rawUrl = (databaseUrl != null && !databaseUrl.trim().isEmpty())
                 ? databaseUrl.trim()
-                : "jdbc:postgresql://localhost:5432/expensechain";
+                : null;
+
+        if (rawUrl == null || rawUrl.isEmpty() || rawUrl.startsWith("jdbc:h2:")) {
+            new java.io.File("./build/h2db").mkdirs();
+            jdbcUrl = (rawUrl != null && rawUrl.startsWith("jdbc:h2:"))
+                    ? rawUrl
+                    : "jdbc:h2:file:./build/h2db/expensechain;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;AUTO_SERVER=TRUE;DB_CLOSE_DELAY=-1";
+            config.setJdbcUrl(jdbcUrl);
+            config.setDriverClassName("org.h2.Driver");
+            config.setUsername(username != null && !username.trim().isEmpty() ? username.trim() : "sa");
+            config.setPassword(password != null ? password.trim() : "");
+            config.setMaximumPoolSize(10);
+            config.setMinimumIdle(2);
+            config.setIdleTimeout(30000);
+            config.setConnectionTimeout(30000);
+            log.info("Configured embedded H2 DataSource (PostgreSQL compatibility mode) with JDBC URL: {}", jdbcUrl);
+            return new HikariDataSource(config);
+        }
 
         if (rawUrl.startsWith("postgres://") || rawUrl.startsWith("postgresql://")) {
             try {

@@ -1,5 +1,5 @@
 # ==============================================================================
-# EXPENSECHAIN DA2 - AUTOMATED ENVIRONMENT SETUP SCRIPT
+# EXPENSECHAIN - AUTOMATED ENVIRONMENT SETUP SCRIPT
 # ==============================================================================
 # Automatically installs portable Java 8, Gradle 6.9.3, deploys Corda 4.11
 # nodes, and builds the Spring Boot backend JAR.
@@ -17,7 +17,7 @@ $GradleDir = Join-Path $ToolsDir "gradle-6.9.3"
 $CordaDir = Join-Path $ScriptDir "expense-chain-corda"
 
 Write-Host "=======================================================================" -ForegroundColor Cyan
-Write-Host "          EXPENSECHAIN DA2 - AUTOMATED ENVIRONMENT SETUP               " -ForegroundColor Cyan
+Write-Host "          EXPENSECHAIN - AUTOMATED ENVIRONMENT SETUP               " -ForegroundColor Cyan
 Write-Host "=======================================================================" -ForegroundColor Cyan
 Write-Host ""
 

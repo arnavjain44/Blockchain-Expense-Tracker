@@ -1,5 +1,5 @@
 # =======================================================================
-# ExpenseChain DA2 - Development Environment Reset Script
+# ExpenseChain - Development Environment Reset Script
 # =======================================================================
 $ErrorActionPreference = "SilentlyContinue"
 

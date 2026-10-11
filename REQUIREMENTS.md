@@ -1,6 +1,6 @@
-# ExpenseChain DA2 — Requirements & System Specifications
+# ExpenseChain — Requirements & System Specifications
 
-This document defines the system prerequisites, runtime components, and automated setup instructions for team members setting up **ExpenseChain DA2** on a new machine.
+This document defines the system prerequisites, runtime components, and automated setup instructions for team members setting up **ExpenseChain** on a new machine.
 
 ---
 

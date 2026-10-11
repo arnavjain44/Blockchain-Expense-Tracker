@@ -2,12 +2,16 @@
 # Gradle & Build Artifacts
 # =========================================================================
 .gradle/
+**/.gradle/
 build/
+**/build/
 bin/
 out/
 target/
 *.class
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
+!expense-chain-corda/gradle/wrapper/gradle-wrapper.jar
 *.war
 *.ear
 
@@ -17,21 +21,52 @@ target/
 tools/
 
 # =========================================================================
+# Logs & Process Tracking
+# =========================================================================
+logs/
+**/logs/
+*.log
+*.tunnel.log
+*.pid
+process-id
+**/process-id
+
+# =========================================================================
+# Environment Variables & Secrets
+# =========================================================================
+.env
+.env.*
+!.env.example
+expense-chain-corda/.env
+expense-chain-corda/.env.*
+!expense-chain-corda/.env.example
+expense-chain-corda/backend/.env
+expense-chain-corda/backend/.env.*
+!expense-chain-corda/backend/.env.example
+expense-chain-corda/docker/.env
+expense-chain-corda/docker/.env.*
+!expense-chain-corda/docker/.env.example
+
+# =========================================================================
 # Corda Node Runtime Logs, Persistence & Node Info
 # =========================================================================
-**/logs/
 **/artemis/
 **/persistence.mv.db
 **/persistence.trace.db
 **/persistence/
 **/node-info-*
 **/nodeInfo-*
-**/process-id
 **/runnodes
 **/runnodes.bat
 **/certificates/
 **/drivers/
 **/.cache/
+
+# =========================================================================
+# Cloudflare & Public Demo Artifacts
+# =========================================================================
+.cloudflared/
+cloudflared.log
 
 # =========================================================================
 # IDEs and Editors
