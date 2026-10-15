@@ -382,6 +382,337 @@
   .positive { color: var(--color-success); }
   .negative { color: var(--color-danger); }
 
+  /* =========================================================================
+     Expense Balance Summary Cards
+     ========================================================================= */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 18px 0 20px 0;
+  }
+
+  @media (max-width: 880px) {
+    .metrics-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+    }
+    .metrics-grid .balance-card-net {
+      grid-column: span 2;
+    }
+  }
+
+  @media (max-width: 580px) {
+    .metrics-grid {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .metrics-grid .balance-card-net {
+      grid-column: span 1;
+    }
+  }
+
+  .metric-card,
+  .balance-card {
+    position: relative;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 126px;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s ease;
+  }
+
+  .metric-card:hover,
+  .balance-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .balance-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .metric-label,
+  .balance-card-label {
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+  }
+
+  .balance-card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+
+  .balance-card:hover .balance-card-icon {
+    transform: scale(1.08);
+  }
+
+  .metric-value,
+  .balance-card-value {
+    font-size: 1.75rem;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+    margin: 10px 0 6px 0;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-heading);
+  }
+
+  .balance-card-footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.74rem;
+    font-weight: 500;
+  }
+
+  .balance-card-sub {
+    font-size: 0.74rem;
+    opacity: 0.75;
+  }
+
+  /* Card 1: You Owe (Red Themed) */
+  .balance-card-owe {
+    background: linear-gradient(145deg, hsl(0, 28%, 8%) 0%, hsl(0, 18%, 5%) 100%);
+    border: 1px solid rgba(179, 80, 75, 0.35);
+    border-top: 3px solid var(--color-danger);
+    box-shadow: 0 4px 16px rgba(179, 80, 75, 0.08);
+  }
+  .balance-card-owe .balance-card-label {
+    color: #f28b82;
+  }
+  .balance-card-owe .balance-card-icon {
+    background: rgba(179, 80, 75, 0.16);
+    border: 1px solid rgba(179, 80, 75, 0.35);
+    color: #ff8a80;
+  }
+  .balance-card-owe .balance-card-value,
+  .balance-card-owe .metric-value.danger {
+    color: #ff6b6b;
+  }
+  .balance-card-owe .balance-card-sub {
+    color: #fca5a5;
+  }
+  .balance-card-owe:hover {
+    border-color: rgba(179, 80, 75, 0.55);
+    box-shadow: 0 6px 20px rgba(179, 80, 75, 0.18);
+  }
+
+  /* Card 2: You Are Owed (Green Themed) */
+  .balance-card-owed {
+    background: linear-gradient(145deg, hsl(145, 28%, 7%) 0%, hsl(145, 18%, 4%) 100%);
+    border: 1px solid rgba(78, 155, 110, 0.35);
+    border-top: 3px solid var(--color-success);
+    box-shadow: 0 4px 16px rgba(78, 155, 110, 0.08);
+  }
+  .balance-card-owed .balance-card-label {
+    color: #81c784;
+  }
+  .balance-card-owed .balance-card-icon {
+    background: rgba(78, 155, 110, 0.16);
+    border: 1px solid rgba(78, 155, 110, 0.35);
+    color: #81c784;
+  }
+  .balance-card-owed .balance-card-value,
+  .balance-card-owed .metric-value.success {
+    color: #4ade80;
+  }
+  .balance-card-owed .balance-card-sub {
+    color: #86efac;
+  }
+  .balance-card-owed:hover {
+    border-color: rgba(78, 155, 110, 0.55);
+    box-shadow: 0 6px 20px rgba(78, 155, 110, 0.18);
+  }
+
+  /* Card 3: Net Balance (Neutral Polished Base with Dynamic Accent) */
+  .balance-card-net {
+    background: linear-gradient(145deg, hsl(0, 0%, 7%) 0%, hsl(0, 0%, 4%) 100%);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--color-primary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  }
+  .balance-card-net .balance-card-label {
+    color: var(--text-muted);
+  }
+  .balance-card-net .balance-card-icon {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    color: var(--color-primary);
+  }
+  .balance-card-net .balance-card-sub {
+    color: var(--text-muted);
+  }
+  .balance-card-net:hover {
+    border-color: var(--text-muted);
+  }
+
+  /* Net Negative State */
+  .balance-card-net.net-negative {
+    background: linear-gradient(145deg, hsl(0, 20%, 7%) 0%, hsl(0, 0%, 5%) 100%);
+    border: 1px solid rgba(179, 80, 75, 0.32);
+    border-top: 3px solid var(--color-danger);
+    box-shadow: 0 4px 16px rgba(179, 80, 75, 0.08);
+  }
+  .balance-card-net.net-negative .balance-card-icon {
+    background: rgba(179, 80, 75, 0.14);
+    border: 1px solid rgba(179, 80, 75, 0.3);
+    color: #ff8a80;
+  }
+  .balance-card-net.net-negative .balance-card-value {
+    color: #ff6b6b;
+  }
+  .balance-card-net.net-negative .balance-card-sub {
+    color: #fca5a5;
+  }
+  .balance-card-net.net-negative:hover {
+    border-color: rgba(179, 80, 75, 0.55);
+    box-shadow: 0 6px 20px rgba(179, 80, 75, 0.16);
+  }
+
+  /* Net Positive State */
+  .balance-card-net.net-positive {
+    background: linear-gradient(145deg, hsl(145, 20%, 6%) 0%, hsl(0, 0%, 5%) 100%);
+    border: 1px solid rgba(78, 155, 110, 0.32);
+    border-top: 3px solid var(--color-success);
+    box-shadow: 0 4px 16px rgba(78, 155, 110, 0.08);
+  }
+  .balance-card-net.net-positive .balance-card-icon {
+    background: rgba(78, 155, 110, 0.14);
+    border: 1px solid rgba(78, 155, 110, 0.3);
+    color: #81c784;
+  }
+  .balance-card-net.net-positive .balance-card-value {
+    color: #4ade80;
+  }
+  .balance-card-net.net-positive .balance-card-sub {
+    color: #86efac;
+  }
+  .balance-card-net.net-positive:hover {
+    border-color: rgba(78, 155, 110, 0.55);
+    box-shadow: 0 6px 20px rgba(78, 155, 110, 0.16);
+  }
+
+  /* Net Zero State */
+  .balance-card-net.net-zero {
+    border-top: 3px solid var(--color-primary);
+  }
+  .balance-card-net.net-zero .balance-card-value {
+    color: var(--text-heading);
+  }
+  .balance-card-net.net-zero .balance-card-icon {
+    color: var(--color-primary);
+  }
+
+  /* Light Theme Variations */
+  body.theme-light .balance-card-owe {
+    background: linear-gradient(145deg, #fff5f5 0%, #fee2e2 100%);
+    border: 1px solid #fca5a5;
+    border-top: 3px solid var(--color-danger);
+    box-shadow: 0 4px 12px rgba(169, 68, 66, 0.08);
+  }
+  body.theme-light .balance-card-owe .balance-card-label {
+    color: #b91c1c;
+  }
+  body.theme-light .balance-card-owe .balance-card-icon {
+    background: #fecaca;
+    border-color: #f87171;
+    color: #dc2626;
+  }
+  body.theme-light .balance-card-owe .balance-card-value,
+  body.theme-light .balance-card-owe .metric-value.danger {
+    color: #b91c1c;
+  }
+  body.theme-light .balance-card-owe .balance-card-sub {
+    color: #991b1b;
+  }
+
+  body.theme-light .balance-card-owed {
+    background: linear-gradient(145deg, #f0fdf4 0%, #dcfce7 100%);
+    border: 1px solid #86efac;
+    border-top: 3px solid var(--color-success);
+    box-shadow: 0 4px 12px rgba(56, 142, 60, 0.08);
+  }
+  body.theme-light .balance-card-owed .balance-card-label {
+    color: #15803d;
+  }
+  body.theme-light .balance-card-owed .balance-card-icon {
+    background: #bbf7d0;
+    border-color: #4ade80;
+    color: #16a34a;
+  }
+  body.theme-light .balance-card-owed .balance-card-value,
+  body.theme-light .balance-card-owed .metric-value.success {
+    color: #15803d;
+  }
+  body.theme-light .balance-card-owed .balance-card-sub {
+    color: #166534;
+  }
+
+  body.theme-light .balance-card-net {
+    background: linear-gradient(145deg, #ffffff 0%, #f9fafb 100%);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--color-primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  }
+  body.theme-light .balance-card-net.net-negative {
+    background: linear-gradient(145deg, #fffafa 0%, #fef2f2 100%);
+    border: 1px solid #fecaca;
+    border-top: 3px solid var(--color-danger);
+  }
+  body.theme-light .balance-card-net.net-negative .balance-card-icon {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #dc2626;
+  }
+  body.theme-light .balance-card-net.net-negative .balance-card-value {
+    color: #b91c1c;
+  }
+  body.theme-light .balance-card-net.net-negative .balance-card-sub {
+    color: #991b1b;
+  }
+
+  body.theme-light .balance-card-net.net-positive {
+    background: linear-gradient(145deg, #f8fdf9 0%, #f0fdf4 100%);
+    border: 1px solid #bbf7d0;
+    border-top: 3px solid var(--color-success);
+  }
+  body.theme-light .balance-card-net.net-positive .balance-card-icon {
+    background: #dcfce7;
+    border-color: #86efac;
+    color: #16a34a;
+  }
+  body.theme-light .balance-card-net.net-positive .balance-card-value {
+    color: #15803d;
+  }
+  body.theme-light .balance-card-net.net-positive .balance-card-sub {
+    color: #166534;
+  }
+
+  body.theme-light .balance-card-net.net-zero {
+    border-top: 3px solid var(--color-primary);
+  }
+  body.theme-light .balance-card-net.net-zero .balance-card-value {
+    color: var(--text-heading);
+  }
+
   /* Badges */
   .badge {
     display: inline-flex;
@@ -1230,6 +1561,23 @@ async function renderDashboard() {
   const netBalance = totalOwed - totalOwe;
   const owingLimit = Number(localStorage.getItem(`owing_limit_${currentUser.id}`)) || 10000;
 
+  let netStateClass = 'net-zero';
+  let netValueClass = 'neutral';
+  let netFormattedAmount = '₹0.00';
+  let netSubText = 'All balances settled';
+
+  if (netBalance > 0) {
+    netStateClass = 'net-positive';
+    netValueClass = 'success';
+    netFormattedAmount = `+₹${netBalance.toFixed(2)}`;
+    netSubText = 'You are owed overall';
+  } else if (netBalance < 0) {
+    netStateClass = 'net-negative';
+    netValueClass = 'danger';
+    netFormattedAmount = `₹${netBalance.toFixed(2)}`;
+    netSubText = 'You owe overall';
+  }
+
   return `
     <div style="margin-bottom:20px;">
       <h2 style="font-size:1.4rem; font-weight:800;">Welcome, ${currentUser.name}</h2>
@@ -1238,18 +1586,59 @@ async function renderDashboard() {
 
     <!-- Summary Metrics Cards -->
     <div class="metrics-grid">
-      <div class="metric-card">
-        <span class="metric-label">You Owe</span>
-        <div class="metric-value danger">₹${totalOwe.toFixed(2)}</div>
+      <!-- Card 1: You Owe -->
+      <div class="metric-card balance-card balance-card-owe">
+        <div class="balance-card-header">
+          <span class="metric-label balance-card-label">You Owe</span>
+          <div class="balance-card-icon" title="Money you owe" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="7" y1="17" x2="17" y2="7"></line>
+              <polyline points="7 7 17 7 17 17"></polyline>
+            </svg>
+          </div>
+        </div>
+        <div class="metric-value balance-card-value danger">₹${totalOwe.toFixed(2)}</div>
+        <div class="balance-card-footer">
+          <span class="balance-card-sub">Total you need to pay</span>
+        </div>
       </div>
-      <div class="metric-card">
-        <span class="metric-label">You are Owed</span>
-        <div class="metric-value success">₹${totalOwed.toFixed(2)}</div>
+
+      <!-- Card 2: You Are Owed -->
+      <div class="metric-card balance-card balance-card-owed">
+        <div class="balance-card-header">
+          <span class="metric-label balance-card-label">You Are Owed</span>
+          <div class="balance-card-icon" title="Money owed to you" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="17" y1="7" x2="7" y2="17"></line>
+              <polyline points="17 17 7 17 7 7"></polyline>
+            </svg>
+          </div>
+        </div>
+        <div class="metric-value balance-card-value success">₹${totalOwed.toFixed(2)}</div>
+        <div class="balance-card-footer">
+          <span class="balance-card-sub">Total owed to you</span>
+        </div>
       </div>
-      <div class="metric-card">
-        <span class="metric-label">Net Balance</span>
-        <div class="metric-value ${netBalance >= 0 ? 'success' : 'danger'}">
-          ${netBalance >= 0 ? '+' : ''}₹${netBalance.toFixed(2)}
+
+      <!-- Card 3: Net Balance -->
+      <div class="metric-card balance-card balance-card-net ${netStateClass}">
+        <div class="balance-card-header">
+          <span class="metric-label balance-card-label">Net Balance</span>
+          <div class="balance-card-icon" title="Net position" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path>
+              <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path>
+              <path d="M7 21h10"></path>
+              <path d="M12 3v18"></path>
+              <path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"></path>
+            </svg>
+          </div>
+        </div>
+        <div class="metric-value balance-card-value ${netValueClass}">
+          ${netFormattedAmount}
+        </div>
+        <div class="balance-card-footer">
+          <span class="balance-card-sub">${netSubText}</span>
         </div>
       </div>
     </div>
