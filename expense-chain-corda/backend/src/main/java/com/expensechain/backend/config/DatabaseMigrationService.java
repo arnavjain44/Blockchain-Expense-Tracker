@@ -91,6 +91,25 @@ public class DatabaseMigrationService {
                 log.warn("Username backfill note: {}", e.getMessage());
             }
 
+            // 6. Create payment_reminders table if not exists
+            try {
+                jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS payment_reminders (" +
+                        "id BIGSERIAL PRIMARY KEY, " +
+                        "group_id BIGINT NOT NULL REFERENCES groups(id) ON DELETE CASCADE, " +
+                        "sender_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, " +
+                        "recipient_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, " +
+                        "amount DOUBLE PRECISION NOT NULL, " +
+                        "status VARCHAR(50) NOT NULL, " +
+                        "provider_message_id VARCHAR(255), " +
+                        "error_message TEXT, " +
+                        "created_at VARCHAR(50) NOT NULL" +
+                        ")");
+                jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_reminders_group ON payment_reminders(group_id)");
+                jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_reminders_sender_recipient ON payment_reminders(sender_id, recipient_id)");
+            } catch (Exception e) {
+                log.debug("Table payment_reminders check/add note: {}", e.getMessage());
+            }
+
             log.info("Database schema migrations completed successfully.");
         } catch (Exception e) {
             log.error("Migration execution error: ", e);

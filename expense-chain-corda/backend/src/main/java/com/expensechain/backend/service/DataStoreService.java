@@ -4,6 +4,7 @@ import com.expensechain.backend.dto.UserDto;
 import com.expensechain.backend.model.*;
 import com.expensechain.backend.repository.ExpenseRepository;
 import com.expensechain.backend.repository.GroupRepository;
+import com.expensechain.backend.repository.PaymentReminderRepository;
 import com.expensechain.backend.repository.SettlementRepository;
 import com.expensechain.backend.repository.UserRepository;
 import com.expensechain.backend.repository.UserSessionRepository;
@@ -45,18 +46,21 @@ public class DataStoreService {
     private final ExpenseRepository expenseRepository;
     private final SettlementRepository settlementRepository;
     private final UserSessionRepository userSessionRepository;
+    private final PaymentReminderRepository paymentReminderRepository;
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     public DataStoreService(UserRepository userRepository,
                             GroupRepository groupRepository,
                             ExpenseRepository expenseRepository,
                             SettlementRepository settlementRepository,
-                            UserSessionRepository userSessionRepository) {
+                            UserSessionRepository userSessionRepository,
+                            PaymentReminderRepository paymentReminderRepository) {
         this.userRepository = userRepository;
         this.groupRepository = groupRepository;
         this.expenseRepository = expenseRepository;
         this.settlementRepository = settlementRepository;
         this.userSessionRepository = userSessionRepository;
+        this.paymentReminderRepository = paymentReminderRepository;
     }
 
     /**
@@ -70,6 +74,7 @@ public class DataStoreService {
         public final AtomicLong splitSeq = new AtomicLong(1);
         public final AtomicLong settlementSeq = new AtomicLong(1);
         public final AtomicLong sessionSeq = new AtomicLong(1);
+        public final AtomicLong reminderSeq = new AtomicLong(1);
 
         public final Map<Long, User> users = new ConcurrentHashMap<>();
         public final Map<Long, Group> groups = new ConcurrentHashMap<>();
@@ -77,6 +82,7 @@ public class DataStoreService {
         public final List<Expense> expenses = Collections.synchronizedList(new ArrayList<>());
         public final List<ExpenseSplit> expenseSplits = Collections.synchronizedList(new ArrayList<>());
         public final List<Settlement> settlements = Collections.synchronizedList(new ArrayList<>());
+        public final List<PaymentReminder> paymentReminders = Collections.synchronizedList(new ArrayList<>());
         public final Map<String, UserSession> demoSessions = new ConcurrentHashMap<>();
 
         public void clear() {
@@ -87,6 +93,7 @@ public class DataStoreService {
             splitSeq.set(1);
             settlementSeq.set(1);
             sessionSeq.set(1);
+            reminderSeq.set(1);
 
             users.clear();
             groups.clear();
@@ -94,6 +101,7 @@ public class DataStoreService {
             expenses.clear();
             expenseSplits.clear();
             settlements.clear();
+            paymentReminders.clear();
             demoSessions.clear();
         }
     }
@@ -949,5 +957,51 @@ public class DataStoreService {
         }
 
         return result;
+    }
+
+    // =========================================================================
+    // PAYMENT REMINDER METHODS
+    // =========================================================================
+
+    public PaymentReminder savePaymentReminder(boolean isDemo, Long groupId, Long senderId, Long recipientId,
+                                               double amount, String status, String providerMessageId, String errorMessage) {
+        String now = Instant.now().toString();
+        if (isDemo) {
+            StoreState store = getStore(true);
+            Long id = store.reminderSeq.getAndIncrement();
+            PaymentReminder reminder = new PaymentReminder(id, groupId, senderId, recipientId, amount, status, providerMessageId, errorMessage, now);
+            store.paymentReminders.add(reminder);
+            return reminder;
+        } else {
+            PaymentReminder reminder = new PaymentReminder(null, groupId, senderId, recipientId, amount, status, providerMessageId, errorMessage, now);
+            return paymentReminderRepository.save(reminder);
+        }
+    }
+
+    public List<PaymentReminder> getRecentReminders(boolean isDemo, Long groupId, Long senderId, Long recipientId) {
+        if (isDemo) {
+            return getStore(true).paymentReminders.stream()
+                    .filter(r -> r.getGroupId().equals(groupId) && r.getSenderId().equals(senderId) && r.getRecipientId().equals(recipientId))
+                    .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                    .collect(Collectors.toList());
+        } else {
+            return paymentReminderRepository.findRecentReminders(groupId, senderId, recipientId);
+        }
+    }
+
+    public boolean isReminderRateLimited(boolean isDemo, Long groupId, Long senderId, Long recipientId, long cooldownSeconds) {
+        List<PaymentReminder> recent = getRecentReminders(isDemo, groupId, senderId, recipientId);
+        if (recent.isEmpty()) return false;
+        for (PaymentReminder r : recent) {
+            if ("ACCEPTED".equalsIgnoreCase(r.getStatus()) || "SENT".equalsIgnoreCase(r.getStatus()) || "ACCEPTED_MOCK".equalsIgnoreCase(r.getStatus())) {
+                try {
+                    Instant created = Instant.parse(r.getCreatedAt());
+                    if (created.plusSeconds(cooldownSeconds).isAfter(Instant.now())) {
+                        return true;
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+        return false;
     }
 }

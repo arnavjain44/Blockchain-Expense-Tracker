@@ -76,6 +76,18 @@ CREATE TABLE IF NOT EXISTS settlements (
     settled_at VARCHAR(50)
 );
 
+CREATE TABLE IF NOT EXISTS payment_reminders (
+    id BIGSERIAL PRIMARY KEY,
+    group_id BIGINT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    sender_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    recipient_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    amount DOUBLE PRECISION NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    provider_message_id VARCHAR(255),
+    error_message TEXT,
+    created_at VARCHAR(50) NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(token_hash);
@@ -89,3 +101,5 @@ CREATE INDEX IF NOT EXISTS idx_expense_splits_user ON expense_splits(user_id);
 CREATE INDEX IF NOT EXISTS idx_settlements_group ON settlements(group_id);
 CREATE INDEX IF NOT EXISTS idx_settlements_paid_by ON settlements(paid_by);
 CREATE INDEX IF NOT EXISTS idx_settlements_paid_to ON settlements(paid_to);
+CREATE INDEX IF NOT EXISTS idx_reminders_group ON payment_reminders(group_id);
+CREATE INDEX IF NOT EXISTS idx_reminders_sender_recipient ON payment_reminders(sender_id, recipient_id);

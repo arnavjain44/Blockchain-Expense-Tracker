@@ -304,6 +304,36 @@
   }
   button.small, .btn-small { padding: 4px 10px; font-size: 0.78rem; }
 
+  /* Payment Reminder Button */
+  .btn-remind {
+    background: linear-gradient(135deg, rgba(83, 114, 184, 0.22) 0%, rgba(83, 114, 184, 0.12) 100%);
+    border: 1px solid rgba(83, 114, 184, 0.45);
+    color: #9cbaff;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+  .btn-remind:hover {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #ffffff;
+    box-shadow: 0 3px 10px rgba(83, 114, 184, 0.35);
+    transform: translateY(-1px);
+  }
+  body.theme-light .btn-remind {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border: 1px solid #93c5fd;
+    color: #1d4ed8;
+  }
+  body.theme-light .btn-remind:hover {
+    background: #2563eb;
+    border-color: #1d4ed8;
+    color: #ffffff;
+    box-shadow: 0 3px 10px rgba(37, 99, 235, 0.25);
+  }
+
   /* Forms */
   input, select, textarea {
     width: 100%;
@@ -1050,6 +1080,93 @@
   }
   .user-chip:hover {
     background: var(--border);
+  }
+  /* UPI Settlement QR Card */
+  .upi-qr-container {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-top: 10px;
+    padding: 14px;
+    border-top: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+  }
+  .upi-qr-frame {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    padding: 8px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    flex-shrink: 0;
+  }
+  .upi-qr-image {
+    width: 180px;
+    height: 180px;
+    aspect-ratio: 1 / 1;
+    display: block;
+    object-fit: contain;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+  .upi-qr-details {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .upi-qr-label {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .upi-qr-val {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-heading);
+    margin-bottom: 10px;
+    word-break: break-all;
+    line-height: 1.4;
+  }
+  .upi-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    align-self: flex-start;
+  }
+  .upi-qr-hint {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 8px;
+    line-height: 1.35;
+  }
+  @media (max-width: 480px) {
+    .upi-qr-container {
+      flex-direction: column;
+      text-align: center;
+      gap: 14px;
+      padding: 12px;
+    }
+    .upi-qr-image {
+      width: 190px;
+      height: 190px;
+    }
+    .upi-qr-details {
+      align-items: center;
+    }
+    .upi-copy-btn {
+      align-self: center;
+    }
   }
 
 </style>
@@ -2071,9 +2188,13 @@ async function renderGroupDetail(groupId) {
                     <input type="checkbox" name="participant" value="${m.userId}" checked class="participant-check" />
                     <b>${userName(m.userId)}${isMe ? ' (You)' : ''}</b>
                   </label>
-                  <input type="number" step="0.01" class="split-custom-input" name="customAmount_${m.userId}" placeholder="₹0.00" style="display:none; width:90px; padding:3px 6px;" />
+                  <input type="number" step="0.01" min="0" class="split-custom-input" name="customAmount_${m.userId}" placeholder="₹0.00" style="display:none; width:95px; padding:4px 8px; font-weight:700; text-align:right;" />
                 </div>`;
               }).join('')}
+            </div>
+            <div id="customSplitHelper" style="display:none; margin-top:8px; padding:8px 12px; border-radius:6px; background:var(--bg-raised); border:1px solid var(--border); justify-content:space-between; align-items:center;">
+              <span id="customSplitHelperText" style="color:var(--text-muted); font-size:0.8rem;">Split Sum: ₹0.00 / Total: ₹0.00</span>
+              <span id="customSplitHelperStatus" style="font-weight:700; font-size:0.8rem;"></span>
             </div>
           </div>
           <div id="expenseError" class="error-text"></div>
@@ -2087,7 +2208,7 @@ async function renderGroupDetail(groupId) {
 
     <!-- Settlement Payment Modal -->
     <div id="settlementModal" class="modal-overlay" style="display:none;">
-      <div class="modal-content" style="max-width:500px;">
+      <div class="modal-content" style="max-width:540px;">
         <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:4px;">Initiate Debt Settlement</h3>
         <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:14px;" id="settleModalSub"></p>
         
@@ -2130,14 +2251,57 @@ async function renderGroupDetail(groupId) {
       </div>
     </div>
 
+    <!-- Payment Reminder Confirmation Modal -->
+    <div id="reminderModal" class="modal-overlay" style="display:none;">
+      <div class="modal-content" style="max-width:480px;">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px;">
+          <div style="width:38px; height:38px; border-radius:8px; background:rgba(83, 114, 184, 0.15); border:1px solid rgba(83, 114, 184, 0.3); display:flex; align-items:center; justify-content:center; color:var(--color-primary);">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="20" height="16" x="2" y="4" rx="2"></rect>
+              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+            </svg>
+          </div>
+          <div>
+            <h3 style="font-size:1.1rem; font-weight:800; margin:0;">Send Payment Reminder</h3>
+            <p style="font-size:0.78rem; color:var(--text-muted); margin:0;">Direct email notification to group debtor</p>
+          </div>
+        </div>
+
+        <div id="remindModalErr" class="error-text" style="margin-bottom:12px;"></div>
+
+        <div style="background:var(--bg-raised); border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:16px;">
+          <p style="font-size:0.88rem; color:var(--text-heading); margin-bottom:8px; line-height:1.5;">
+            Send a payment reminder to <strong id="remindRecipientName" style="color:var(--text-heading);">[Member Name]</strong> for <strong id="remindAmount" style="color:var(--color-danger);">₹0.00</strong> in <strong id="remindGroupName" style="color:var(--text-heading);">${group.name}</strong>?
+          </p>
+          <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.4;">
+            ✉️ A polite email reminder will be sent to their verified registered email address with the outstanding balance and group details.
+          </div>
+        </div>
+
+        <input type="hidden" id="remindGroupId" value="${groupId}">
+        <input type="hidden" id="remindRecipientId">
+
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button type="button" class="secondary" id="cancelRemindModalBtn">Cancel</button>
+          <button type="button" class="btn-primary" id="confirmSendReminderBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:4px;">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+            Send Reminder
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Tab Body -->
     <div id="groupTabBody">
-      ${renderGroupTabContent(tab, groupId, members, expenses, settlements, debts)}
+      ${renderGroupTabContent(tab, groupId, members, expenses, settlements, debts, group.name)}
     </div>
   `;
 }
 
-function renderGroupTabContent(tab, groupId, members, expenses, settlements, debts) {
+function renderGroupTabContent(tab, groupId, members, expenses, settlements, debts, groupName = 'Group') {
   if (tab === 'Expenses') {
     return `
       <div class="table-responsive">
@@ -2180,6 +2344,14 @@ function renderGroupTabContent(tab, groupId, members, expenses, settlements, deb
                   <button class="btn secondary small" disabled title="Waiting for receiver to verify payment receipt in Inbox">Pending Verification...</button>
                 ` : isDebtor ? `
                   <button class="btn-success small" data-open-settle="${groupId}|${b.from}|${b.to}|${b.amount}">Initiate Settlement</button>
+                ` : isCreditor ? `
+                  <button class="btn small btn-remind" data-open-remind="${groupId}|${b.from}|${b.amount}|${encodeURIComponent(userName(b.from))}|${encodeURIComponent(groupName)}" title="Send email payment reminder to ${userName(b.from)}">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect width="20" height="16" x="2" y="4" rx="2"></rect>
+                      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+                    </svg>
+                    Remind to Pay
+                  </button>
                 ` : `
                   <span style="font-size:0.78rem; color:var(--text-muted); font-weight:600; padding:4px 8px;">Unsettled</span>
                 `}
@@ -2220,15 +2392,28 @@ function renderGroupTabContent(tab, groupId, members, expenses, settlements, deb
           ${members.map(m => {
             const u = m.user || userCache.get(m.userId) || { id: m.userId, name: `User #${m.userId}` };
             const isMe = currentUser && m.userId === currentUser.id;
+            const debtToMe = debts.find(d => currentUser && d.from === m.userId && d.to === currentUser.id && Number(d.amount) > 0.01);
             return `
-              <div class="activity-item">
-                <div>
+              <div class="activity-item" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                   <b>${u.name}</b>
-                  ${u.username ? `<span style="font-size:0.75rem; color:var(--text-muted); margin-left:4px;">@${u.username}</span>` : ''}
-                  ${u.upiId ? `<span class="badge badge-info" style="margin-left:6px; font-size:0.7rem;">UPI: ${u.upiId}</span>` : ''}
-                  <span class="badge badge-primary" style="margin-left:6px;">${m.role}</span>
+                  ${u.username ? `<span style="font-size:0.75rem; color:var(--text-muted);">@${u.username}</span>` : ''}
+                  ${u.upiId ? `<span class="badge badge-info" style="font-size:0.7rem;">UPI: ${u.upiId}</span>` : ''}
+                  <span class="badge badge-primary">${m.role}</span>
                 </div>
-                ${isMe ? '<span class="badge badge-success">You</span>' : ''}
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                  ${isMe ? '<span class="badge badge-success">You</span>' : ''}
+                  ${(!isMe && debtToMe) ? `
+                    <span style="font-size:0.8rem; font-weight:700; color:var(--color-danger);">Owes you ₹${Number(debtToMe.amount).toFixed(2)}</span>
+                    <button class="btn small btn-remind" data-open-remind="${groupId}|${m.userId}|${debtToMe.amount}|${encodeURIComponent(u.name)}|${encodeURIComponent(groupName)}" title="Send email payment reminder to ${u.name}">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="20" height="16" x="2" y="4" rx="2"></rect>
+                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+                      </svg>
+                      Remind to Pay
+                    </button>
+                  ` : ''}
+                </div>
               </div>`;
           }).join('')}
         </div>
@@ -2581,7 +2766,7 @@ function updateSettleUpiUi(amount) {
   if (recipientUpi) {
     const amtNum = Number(amount) || 0;
     const upiUrl = `upi://pay?pa=${encodeURIComponent(recipientUpi)}&pn=${encodeURIComponent(recipientName)}&am=${encodeURIComponent(amtNum.toFixed(2))}&cu=INR&tn=${encodeURIComponent('ExpenseChain Settlement')}`;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(upiUrl)}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=360x360&data=${encodeURIComponent(upiUrl)}`;
 
     upiSection.innerHTML = `
       <div style="background:var(--bg-raised); border:1px solid var(--border); border-radius:6px; padding:14px;">
@@ -2594,12 +2779,21 @@ function updateSettleUpiUi(amount) {
           <span>Launch UPI App (₹${amtNum.toFixed(2)})</span>
         </a>
 
-        <div style="display:flex; align-items:center; gap:12px; margin-top:8px; padding-top:10px; border-top:1px solid var(--border);">
-          <img src="${qrUrl}" alt="Scan UPI QR" style="width:90px; height:90px; border-radius:6px; border:1px solid var(--border); background:#fff; padding:3px;" />
-          <div style="font-size:0.78rem; flex:1;">
-            <div style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; font-weight:700;">Recipient UPI ID</div>
-            <div class="mono" style="font-weight:700; margin:3px 0 6px 0; word-break:break-all;">${recipientUpi}</div>
-            <button type="button" class="secondary small" style="padding:3px 8px; font-size:0.72rem;" onclick="copyText('${recipientUpi}', 'UPI ID copied to clipboard ✓')">Copy UPI ID</button>
+        <div class="upi-qr-container">
+          <div class="upi-qr-frame">
+            <img src="${qrUrl}" alt="Scan UPI QR" class="upi-qr-image" />
+          </div>
+          <div class="upi-qr-details">
+            <div class="upi-qr-label">Recipient UPI ID</div>
+            <div class="mono upi-qr-val">${recipientUpi}</div>
+            <button type="button" class="secondary small upi-copy-btn" onclick="copyText('${recipientUpi}', 'UPI ID copied to clipboard ✓')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:4px;">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              Copy UPI ID
+            </button>
+            <div class="upi-qr-hint">Scan with Google Pay, PhonePe, Paytm, or any UPI app to pay</div>
           </div>
         </div>
 
@@ -2784,31 +2978,188 @@ function attachEventHandlers() {
     cancelExpenseModalBtn.addEventListener('click', () => { addExpenseModal.style.display = 'none'; });
   }
 
+  // -------------------------------------------------------------------------
+  // Dynamic Custom Split Auto-Adjustment
+  // -------------------------------------------------------------------------
   const splitTypeSelect = document.getElementById('splitTypeSelect');
+  const expenseAmountInput = document.getElementById('expenseAmountInput');
+  const customSplitHelper = document.getElementById('customSplitHelper');
+  const customSplitHelperText = document.getElementById('customSplitHelperText');
+  const customSplitHelperStatus = document.getElementById('customSplitHelperStatus');
+  let customEditHistory = [];
+
+  function getCheckedCustomInputs() {
+    return Array.from(document.querySelectorAll('.participant-check:checked'))
+      .map(chk => document.querySelector(`input[name="customAmount_${chk.value}"]`))
+      .filter(Boolean);
+  }
+
+  function updateCustomSplitHelper() {
+    if (!customSplitHelper || !splitTypeSelect || splitTypeSelect.value !== 'CUSTOM') {
+      if (customSplitHelper) customSplitHelper.style.display = 'none';
+      return;
+    }
+    customSplitHelper.style.display = 'flex';
+    const totalAmt = parseFloat(expenseAmountInput ? expenseAmountInput.value : 0) || 0;
+    const checkedInputs = getCheckedCustomInputs();
+    let sumCustom = 0;
+    checkedInputs.forEach(inp => {
+      sumCustom += parseFloat(inp.value) || 0;
+    });
+    sumCustom = Math.round(sumCustom * 100) / 100;
+    const formattedTotal = totalAmt.toFixed(2);
+    const formattedSum = sumCustom.toFixed(2);
+
+    if (customSplitHelperText) {
+      customSplitHelperText.textContent = `Split Sum: ₹${formattedSum} / Total: ₹${formattedTotal}`;
+    }
+
+    if (!customSplitHelperStatus) return;
+
+    const diff = Math.round((totalAmt - sumCustom) * 100) / 100;
+    if (Math.abs(diff) <= 0.01) {
+      customSplitHelperStatus.innerHTML = '<span style="color:var(--color-success);">✓ Balanced</span>';
+      customSplitHelper.style.borderColor = 'rgba(74, 222, 128, 0.4)';
+    } else if (diff > 0.01) {
+      customSplitHelperStatus.innerHTML = `<span style="color:var(--color-warning);">₹${diff.toFixed(2)} remaining</span>`;
+      customSplitHelper.style.borderColor = 'rgba(251, 191, 36, 0.4)';
+    } else {
+      customSplitHelperStatus.innerHTML = `<span style="color:var(--color-danger);">₹${Math.abs(diff).toFixed(2)} over total</span>`;
+      customSplitHelper.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+    }
+  }
+
+  function initializeCustomSplit(forceEqual = false) {
+    const totalAmt = parseFloat(expenseAmountInput ? expenseAmountInput.value : 0) || 0;
+    const checkedInputs = getCheckedCustomInputs();
+    if (checkedInputs.length === 0) return;
+
+    if (forceEqual || checkedInputs.some(inp => !inp.value || parseFloat(inp.value) === 0)) {
+      const baseShare = Math.floor((totalAmt / checkedInputs.length) * 100) / 100;
+      let allocated = 0;
+      checkedInputs.forEach((inp, idx) => {
+        if (idx === checkedInputs.length - 1) {
+          const finalShare = Math.max(0, Math.round((totalAmt - allocated) * 100) / 100);
+          inp.value = finalShare.toFixed(2);
+        } else {
+          inp.value = baseShare.toFixed(2);
+          allocated += baseShare;
+        }
+      });
+      customEditHistory = [];
+    }
+    updateCustomSplitHelper();
+  }
+
+  function adjustOtherCustomShares(changedInput) {
+    const totalAmt = parseFloat(expenseAmountInput ? expenseAmountInput.value : 0) || 0;
+    const checkedInputs = getCheckedCustomInputs();
+    if (checkedInputs.length < 2) {
+      updateCustomSplitHelper();
+      return;
+    }
+
+    // Record edit history
+    customEditHistory = customEditHistory.filter(inp => inp !== changedInput && checkedInputs.includes(inp));
+    customEditHistory.push(changedInput);
+
+    if (checkedInputs.length === 2) {
+      // Exactly 2 participants: automatically adjust the other person by subtracting from total
+      const other = checkedInputs.find(inp => inp !== changedInput);
+      if (other) {
+        const changedVal = parseFloat(changedInput.value) || 0;
+        const remainder = Math.max(0, Math.round((totalAmt - changedVal) * 100) / 100);
+        other.value = remainder.toFixed(2);
+      }
+    } else {
+      // 3 or more participants:
+      // Adjust the other participant who has not been modified yet, or least recently modified
+      const others = checkedInputs.filter(inp => inp !== changedInput);
+      let target = others.find(inp => !customEditHistory.includes(inp));
+      if (!target) {
+        target = others.slice().sort((a, b) => customEditHistory.indexOf(a) - customEditHistory.indexOf(b))[0];
+      }
+
+      let sumOthers = 0;
+      checkedInputs.forEach(inp => {
+        if (inp !== target) {
+          sumOthers += parseFloat(inp.value) || 0;
+        }
+      });
+
+      const remainder = Math.max(0, Math.round((totalAmt - sumOthers) * 100) / 100);
+      target.value = remainder.toFixed(2);
+    }
+
+    updateCustomSplitHelper();
+  }
+
   if (splitTypeSelect) {
     const handleSplitChange = () => {
       const isCustom = splitTypeSelect.value === 'CUSTOM';
-      const inputs = document.querySelectorAll('.split-custom-input');
-      inputs.forEach(inp => {
-        inp.style.display = isCustom ? 'inline-block' : 'none';
+      const allCustomInputs = document.querySelectorAll('.split-custom-input');
+      const checkedBoxes = Array.from(document.querySelectorAll('.participant-check:checked')).map(c => c.value);
+
+      allCustomInputs.forEach(inp => {
+        const uid = inp.name.replace('customAmount_', '');
+        inp.style.display = (isCustom && checkedBoxes.includes(uid)) ? 'inline-block' : 'none';
       });
+
       if (isCustom) {
-        const amountEl = document.getElementById('expenseAmountInput');
-        const totalAmt = amountEl ? (parseFloat(amountEl.value) || 0) : 0;
-        const checkedChecks = Array.from(document.querySelectorAll('.participant-check:checked'));
-        if (totalAmt > 0 && checkedChecks.length > 0) {
-          const share = (totalAmt / checkedChecks.length).toFixed(2);
-          checkedChecks.forEach(chk => {
-            const inp = document.querySelector(`input[name="customAmount_${chk.value}"]`);
-            if (inp && (!inp.value || parseFloat(inp.value) === 0)) {
-              inp.value = share;
-            }
-          });
-        }
+        initializeCustomSplit(true);
+      } else {
+        if (customSplitHelper) customSplitHelper.style.display = 'none';
       }
     };
     splitTypeSelect.addEventListener('change', handleSplitChange);
   }
+
+  // Real-time custom input change listener
+  document.querySelectorAll('.split-custom-input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      if (splitTypeSelect && splitTypeSelect.value === 'CUSTOM') {
+        adjustOtherCustomShares(inp);
+      }
+    });
+  });
+
+  // When total expense amount changes, adjust custom shares if in CUSTOM mode
+  if (expenseAmountInput) {
+    expenseAmountInput.addEventListener('input', () => {
+      if (splitTypeSelect && splitTypeSelect.value === 'CUSTOM') {
+        const totalAmt = parseFloat(expenseAmountInput.value) || 0;
+        const checkedInputs = getCheckedCustomInputs();
+        if (checkedInputs.length === 2) {
+          const active = customEditHistory.length > 0 ? customEditHistory[customEditHistory.length - 1] : checkedInputs[0];
+          const other = checkedInputs.find(inp => inp !== active) || checkedInputs[1];
+          const activeVal = parseFloat(active.value) || 0;
+          const rem = Math.max(0, Math.round((totalAmt - activeVal) * 100) / 100);
+          other.value = rem.toFixed(2);
+        } else if (customEditHistory.length === 0) {
+          initializeCustomSplit(true);
+        } else {
+          const active = customEditHistory[customEditHistory.length - 1];
+          if (active) adjustOtherCustomShares(active);
+        }
+        updateCustomSplitHelper();
+      }
+    });
+  }
+
+  // When participant checkboxes toggle
+  document.querySelectorAll('.participant-check').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const isCustom = splitTypeSelect && splitTypeSelect.value === 'CUSTOM';
+      const customInp = document.querySelector(`input[name="customAmount_${chk.value}"]`);
+      if (customInp) {
+        customInp.style.display = (isCustom && chk.checked) ? 'inline-block' : 'none';
+        if (!chk.checked) customInp.value = '';
+      }
+      if (isCustom) {
+        initializeCustomSplit(true);
+      }
+    });
+  });
 
   async function pollOperation(operationId) {
     const startTime = Date.now();
@@ -3033,6 +3384,117 @@ function attachEventHandlers() {
         if (err) err.textContent = ex.message || 'Error initiating settlement';
         submitBtn.disabled = false;
         submitBtn.textContent = 'Initiate Settlement on Ledger';
+      }
+    });
+  }
+
+  // Payment Reminder Event Handlers
+  document.querySelectorAll('[data-open-remind]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const parts = btn.getAttribute('data-open-remind').split('|');
+      const gId = parts[0];
+      const rId = parts[1];
+      const amtStr = parts[2];
+      const rName = decodeURIComponent(parts[3] || 'Member');
+      const gName = decodeURIComponent(parts[4] || 'Expense Group');
+      const amt = Number(amtStr) || 0;
+
+      const modal = document.getElementById('reminderModal');
+      const errEl = document.getElementById('remindModalErr');
+      const recipientEl = document.getElementById('remindRecipientName');
+      const amountEl = document.getElementById('remindAmount');
+      const groupEl = document.getElementById('remindGroupName');
+      const confirmBtn = document.getElementById('confirmSendReminderBtn');
+
+      const gInput = document.getElementById('remindGroupId');
+      const rInput = document.getElementById('remindRecipientId');
+      if (gInput) gInput.value = gId;
+      if (rInput) rInput.value = rId;
+
+      if (recipientEl) recipientEl.textContent = rName;
+      if (amountEl) amountEl.textContent = `₹${amt.toFixed(2)}`;
+      if (groupEl) groupEl.textContent = gName;
+      if (errEl) errEl.textContent = '';
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:4px;">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+          Send Reminder
+        `;
+      }
+
+      if (modal) modal.style.display = 'flex';
+    });
+  });
+
+  const cancelRemindModalBtn = document.getElementById('cancelRemindModalBtn');
+  if (cancelRemindModalBtn) {
+    cancelRemindModalBtn.addEventListener('click', () => {
+      const modal = document.getElementById('reminderModal');
+      if (modal) modal.style.display = 'none';
+    });
+  }
+
+  const reminderModalOverlay = document.getElementById('reminderModal');
+  if (reminderModalOverlay) {
+    reminderModalOverlay.addEventListener('click', (e) => {
+      if (e.target === reminderModalOverlay) reminderModalOverlay.style.display = 'none';
+    });
+  }
+
+  const confirmSendReminderBtn = document.getElementById('confirmSendReminderBtn');
+  if (confirmSendReminderBtn) {
+    confirmSendReminderBtn.addEventListener('click', async () => {
+      const modal = document.getElementById('reminderModal');
+      const errEl = document.getElementById('remindModalErr');
+      const gInput = document.getElementById('remindGroupId');
+      const rInput = document.getElementById('remindRecipientId');
+      const recipientEl = document.getElementById('remindRecipientName');
+
+      const gId = gInput ? gInput.value : '';
+      const rId = rInput ? rInput.value : '';
+      const rName = recipientEl ? recipientEl.textContent : 'Member';
+
+      if (errEl) errEl.textContent = '';
+      confirmSendReminderBtn.disabled = true;
+      confirmSendReminderBtn.innerHTML = `
+        <span style="display:inline-block; margin-right:6px;">✉️</span>
+        Sending Reminder...
+      `;
+
+      try {
+        const res = await apiFetch(`/groups/${gId}/remind/${rId}`, {
+          method: 'POST'
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          if (errEl) errEl.textContent = data.error || 'Failed to send payment reminder.';
+          confirmSendReminderBtn.disabled = false;
+          confirmSendReminderBtn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:4px;">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+            Send Reminder
+          `;
+          return;
+        }
+
+        if (modal) modal.style.display = 'none';
+        showToast(data.message || `Payment reminder sent to ${rName} ✓`);
+      } catch (err) {
+        if (errEl) errEl.textContent = err.message || 'Error communicating with server.';
+        confirmSendReminderBtn.disabled = false;
+        confirmSendReminderBtn.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:4px;">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+          Send Reminder
+        `;
       }
     });
   }

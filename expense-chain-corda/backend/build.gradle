@@ -29,6 +29,7 @@ dependencies {
     
     // Persistent Database & Security
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'org.postgresql:postgresql'
     implementation 'com.h2database:h2:2.2.224'
     implementation 'org.springframework.security:spring-security-crypto'
